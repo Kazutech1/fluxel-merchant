@@ -417,7 +417,7 @@ export default function App() {
             <TeamView
               teamMembers={teamMembers}
               sessions={sessions}
-              onInviteMember={(name, email, role) => setTeamMembers([...teamMembers, { id: `usr_${Date.now()}`, name, email, role, status: 'invited', totp_enabled: false, last_active_at: 'Never' }])}
+              onInviteMember={(name, email, role) => setTeamMembers([...teamMembers, { id: `usr_${Date.now()}`, name, email, role: role as any, status: 'invited', totp_enabled: false, last_active_at: 'Never' }])}
               onRevokeSession={(id) => setSessions(sessions.filter((s) => s.id !== id))}
             />
           )}

@@ -35,48 +35,51 @@ export default function Header({
     <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shrink-0">
       {/* Sandbox Warning Banner */}
       {environment === 'sandbox' && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-semibold text-amber-900 truncate">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span className="truncate">SANDBOX ACTIVE — Simulated keys (`sk_test_*`), real money moves disabled.</span>
+        <div className="bg-amber-50 border-b border-amber-200 px-3 sm:px-6 py-1.5 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 text-amber-900 truncate">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="truncate font-medium text-[11px] sm:text-xs">SANDBOX ACTIVE — Simulated environment.</span>
           </div>
           <button
             onClick={() => onEnvironmentToggle('live')}
-            className="text-xs font-bold text-amber-900 hover:text-amber-700 underline cursor-pointer shrink-0 ml-2"
+            className="text-[11px] sm:text-xs font-bold text-amber-900 hover:text-amber-700 underline cursor-pointer shrink-0 ml-2"
           >
             Switch Live
           </button>
         </div>
       )}
 
-      <div className="h-16 px-4 sm:px-8 flex items-center justify-between">
-        {/* Left Title, Mobile Menu Trigger & Breadcrumb */}
-        <div className="flex items-center gap-3">
+      <div className="h-16 px-3 sm:px-6 flex items-center justify-between gap-2 min-w-0">
+        {/* Left Title & Mobile Menu Trigger */}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {onOpenMobileSidebar && (
             <button
               onClick={onOpenMobileSidebar}
-              className="lg:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg fast-transition cursor-pointer"
+              className="lg:hidden p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg fast-transition cursor-pointer shrink-0"
               title="Open Navigation Menu"
             >
               <Menu className="w-5 h-5" />
             </button>
           )}
 
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 truncate">{activeTabTitle}</h2>
-          <span className="hidden sm:inline-block text-xs px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-600 font-mono">
+          <h2 className="text-sm sm:text-base md:text-lg font-bold text-slate-900 truncate leading-tight">
+            {activeTabTitle}
+          </h2>
+
+          <span className="hidden md:inline-block text-xs px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-600 font-mono shrink-0">
             {businessSettings.merchant_id}
           </span>
         </div>
 
-        {/* Right Tools */}
-        <div className="flex items-center gap-2 sm:gap-4">
+        {/* Right Tools (Environment Switcher, Notifications, User Avatar & Logout) */}
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* Environment Switcher Toggle */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+          <div className="flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-lg border border-slate-200 text-[10px] sm:text-xs font-semibold">
             <button
               onClick={() => onEnvironmentToggle('live')}
-              className={`px-2 sm:px-3 py-1 text-[11px] sm:text-xs font-semibold rounded-md fast-transition cursor-pointer ${
+              className={`px-2 py-0.5 sm:px-3 sm:py-1 rounded-md fast-transition cursor-pointer ${
                 environment === 'live'
-                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
+                  ? 'bg-white text-slate-900 shadow-xs border border-slate-200 font-bold'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -84,9 +87,9 @@ export default function Header({
             </button>
             <button
               onClick={() => onEnvironmentToggle('sandbox')}
-              className={`px-2 sm:px-3 py-1 text-[11px] sm:text-xs font-semibold rounded-md fast-transition cursor-pointer ${
+              className={`px-2 py-0.5 sm:px-3 sm:py-1 rounded-md fast-transition cursor-pointer ${
                 environment === 'sandbox'
-                  ? 'bg-amber-500 text-white shadow-xs'
+                  ? 'bg-amber-500 text-white shadow-xs font-bold'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -98,10 +101,10 @@ export default function Header({
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg relative fast-transition cursor-pointer"
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg relative fast-transition cursor-pointer"
             >
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-600 rounded-full"></span>
+              <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-indigo-600 rounded-full"></span>
             </button>
 
             {showNotifications && (
@@ -128,18 +131,18 @@ export default function Header({
           </div>
 
           {/* User Profile & Logout */}
-          <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-3 border-l border-slate-200">
-            <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+          <div className="flex items-center gap-1.5 sm:gap-3 pl-1.5 sm:pl-3 border-l border-slate-200">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-900 text-white font-bold text-[11px] sm:text-xs flex items-center justify-center shadow-xs">
               SJ
             </div>
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <p className="text-xs font-bold text-slate-900 leading-tight">Sarah Jenkins</p>
               <p className="text-[10px] text-slate-500 font-medium">{userRole} · {businessSettings.business_name}</p>
             </div>
             <button
               onClick={onLogout}
               title="Logout session"
-              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg fast-transition cursor-pointer"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg fast-transition cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>

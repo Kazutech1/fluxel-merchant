@@ -155,24 +155,24 @@ export default function OverviewView({
 
           <div className="divide-y divide-slate-100">
             {recentTransactions.slice(0, 5).map((txn) => (
-              <div key={txn.id} className="py-3.5 flex items-center justify-between hover:bg-slate-50 px-2 rounded-lg fast-transition">
-                <div className="flex items-center gap-3">
-                  <AssetIcon code={txn.asset_code} className="w-7 h-7" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900 uppercase">{txn.kind.replace('_', ' ')}</span>
+              <div key={txn.id} className="py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 hover:bg-slate-50 px-2 rounded-lg fast-transition">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <AssetIcon code={txn.asset_code} className="w-7 h-7 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-900 uppercase shrink-0">{txn.kind.replace('_', ' ')}</span>
                       <CorrelationBadge correlationId={txn.correlation_id} />
                     </div>
-                    <p className="text-xs text-slate-500 font-medium">{txn.customer_name || 'System Merchant Action'}</p>
+                    <p className="text-xs text-slate-500 font-medium truncate">{txn.customer_name || 'System Merchant Action'}</p>
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                   <div className="text-xs font-bold text-slate-900">
                     <MinorUnitFormatter amount={txn.amount} assetCode={txn.asset_code} />
                   </div>
-                  <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded mt-0.5 ${
-                    txn.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  <span className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded uppercase border ${
+                    txn.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
                   }`}>
                     {txn.status}
                   </span>
