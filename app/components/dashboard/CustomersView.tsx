@@ -158,8 +158,8 @@ export default function CustomersView({
       </div>
 
       {/* Customers Table */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-        <table className="w-full text-left border-collapse">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[700px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               <th className="py-3 px-6">Customer & Identity</th>

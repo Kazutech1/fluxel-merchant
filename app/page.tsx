@@ -55,6 +55,7 @@ export default function App() {
   // Navigation & Env
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [environment, setEnvironment] = useState<Environment>('live');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Interactive State
   const [balances, setBalances] = useState(initialBalances);
@@ -311,6 +312,8 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         pendingReviewCount={pendingReviewHolds.length}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -322,6 +325,7 @@ export default function App() {
           activeTabTitle={tabTitles[activeTab]}
           userRole={userRole}
           onLogout={handleLogout}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
         />
 
         <main className="p-8 max-w-7xl w-full mx-auto flex-1">
