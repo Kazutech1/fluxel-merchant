@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --background: #f8fafc;
@@ -9,6 +11,18 @@
     --border: #e2e8f0;
     --primary: #4f46e5;
     --primary-foreground: #ffffff;
+    --accent-gold: #fed700;
+  }
+
+  .dark {
+    --background: #0d0d0d;
+    --foreground: #f8fafc;
+    --card: #141416;
+    --card-foreground: #f8fafc;
+    --border: #222226;
+    --primary: #fed700;
+    --primary-foreground: #0d0d0d;
+    --accent-gold: #fed700;
   }
 }
 
@@ -17,6 +31,7 @@ body {
   color: var(--foreground);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 200ms ease-in-out, color 200ms ease-in-out;
 }
 
 /* Custom fast transitions */
@@ -32,10 +47,29 @@ body {
 ::-webkit-scrollbar-track {
   background: #f1f5f9;
 }
+.dark ::-webkit-scrollbar-track {
+  background: #141416;
+}
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #2a2a30;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Glowing accent effects for dark mode */
+.gold-glow {
+  box-shadow: 0 0 25px -5px rgba(254, 215, 0, 0.25);
+}
+.gold-border-glow {
+  box-shadow: 0 0 15px 0 rgba(254, 215, 0, 0.15);
+}
+

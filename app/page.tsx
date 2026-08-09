@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AuthView from './components/auth/AuthView';
 import Sidebar, { TabType } from './components/common/Sidebar';
 import Header from './components/common/Header';
@@ -47,6 +47,31 @@ import {
 import { CheckCircle2, X, QrCode, Building2 } from 'lucide-react';
 
 export default function App() {
+  // Theme State (Dark Mode default based on Logo obsidian black & gold accent palette)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('fluxel_theme') as 'dark' | 'light' | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else {
+      setTheme('dark');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('fluxel_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState('Owner');
@@ -281,7 +306,7 @@ export default function App() {
 
   // Render Auth Page if not logged in
   if (!isAuthenticated) {
-    return <AuthView onLoginSuccess={handleLoginSuccess} />;
+    return <AuthView onLoginSuccess={handleLoginSuccess} theme={theme} onToggleTheme={toggleTheme} />;
   }
 
   const tabTitles: Record<TabType, string> = {
@@ -298,10 +323,10 @@ export default function App() {
   const pendingReviewHolds = transactions.filter((t) => t.status === 'pending_review');
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans antialiased text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0d0d0d] flex font-sans antialiased text-slate-900 dark:text-slate-100 selection:bg-amber-500/20 selection:text-amber-400">
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl border border-slate-800 text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white dark:bg-[#1c1c20] dark:border-amber-500/30 px-4 py-3 rounded-lg shadow-xl border border-slate-800 text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-150">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{toast}</span>
         </div>
@@ -326,6 +351,8 @@ export default function App() {
           userRole={userRole}
           onLogout={handleLogout}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
 
         <main className="p-8 max-w-7xl w-full mx-auto flex-1">
@@ -465,34 +492,34 @@ export default function App() {
 
       {/* Create Dynamic Deposit Intent Modal Dialog */}
       {showCreateIntentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs fast-transition">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-md p-6 relative animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs fast-transition">
+          <div className="bg-white dark:bg-[#141416] rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 relative animate-in fade-in zoom-in-95 duration-150">
             <button
               onClick={() => setShowCreateIntentModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 fast-transition cursor-pointer"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 fast-transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
+              <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-amber-500/10 border border-indigo-100 dark:border-amber-500/30 text-indigo-600 dark:text-[#fed700]">
                 <Building2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Create Dynamic NGN Deposit Intent</h3>
-                <p className="text-xs text-slate-500 font-medium">ADR-021 · 30-Minute Valid Virtual Account</p>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create Dynamic NGN Deposit Intent</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">ADR-021 · 30-Minute Valid Virtual Account</p>
               </div>
             </div>
 
             <form onSubmit={handleCreateIntentSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                   Select Target Customer
                 </label>
                 <select
                   value={intentCustomer}
                   onChange={(e) => setIntentCustomer(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 font-medium"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-white font-medium outline-none"
                 >
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -503,7 +530,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                   Expected Deposit Amount (NGN)
                 </label>
                 <input
@@ -512,21 +539,21 @@ export default function App() {
                   value={intentAmount}
                   onChange={(e) => setIntentAmount(e.target.value)}
                   placeholder="50000"
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 font-bold"
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 rounded-lg text-sm text-slate-900 dark:text-white font-bold outline-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowCreateIntentModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs flex items-center gap-2 cursor-pointer"
+                  className="px-4 py-2.5 text-xs font-bold text-white dark:text-slate-950 bg-indigo-600 dark:bg-[#fed700] hover:bg-indigo-700 dark:hover:bg-amber-300 rounded-lg shadow-xs flex items-center gap-2 cursor-pointer"
                 >
                   <QrCode className="w-4 h-4" />
                   <span>Issue Intent & Display QR Code</span>

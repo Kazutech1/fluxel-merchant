@@ -136,21 +136,21 @@ export default function CustomersView({
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
       {/* Controls Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-[#141416] border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs fast-transition">
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by customer name, email, BVN, ID..."
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white fast-transition"
+            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-400 dark:focus:ring-[#fed700] fast-transition outline-none"
           />
         </div>
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-xs fast-transition cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2 bg-indigo-600 dark:bg-[#fed700] hover:bg-indigo-700 dark:hover:bg-amber-300 text-white dark:text-slate-950 rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-xs fast-transition cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Provision New Customer</span>
@@ -158,10 +158,10 @@ export default function CustomersView({
       </div>
 
       {/* Customers Table */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-x-auto">
+      <div className="bg-white dark:bg-[#141416] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-x-auto fast-transition">
         <table className="w-full text-left border-collapse min-w-[700px]">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <tr className="bg-slate-50 dark:bg-[#1c1c20] border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <th className="py-3 px-6">Customer & Identity</th>
               <th className="py-3 px-6">KYC & Risk Score</th>
               <th className="py-3 px-6">Balances Overview</th>
@@ -169,9 +169,9 @@ export default function CustomersView({
               <th className="py-3 px-6 text-right">Account Controls</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs text-slate-700 dark:text-slate-300 font-medium">
             {filteredCustomers.map((cus) => (
-              <tr key={cus.id} className="hover:bg-slate-50 fast-transition">
+              <tr key={cus.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 fast-transition">
                 <td className="py-4 px-6 cursor-pointer" onClick={() => setSelectedCustomer(cus)}>
                   <div>
                     <span className="font-bold text-slate-900 text-sm block hover:text-indigo-600 fast-transition">{cus.name}</span>
