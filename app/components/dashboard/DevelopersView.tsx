@@ -25,7 +25,7 @@ export default function DevelopersView({
   onRotateWebhookSecret,
   onRequestTestFireWebhook,
 }: DevelopersViewProps) {
-  const [subTab, setSubTab] = useState<'keys' | 'webhooks' | 'docs'>('keys');
+  const [subTab, setSubTab] = useState<'keys' | 'webhooks' >('keys');
   const [showCreateKeyModal, setShowCreateKeyModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyClass, setNewKeyClass] = useState<'pk' | 'sk'>('sk');
@@ -69,9 +69,9 @@ export default function DevelopersView({
         </button>
 
         <button
-          onClick={() => setSubTab('docs')}
+          onClick={() => setSubTab('webhooks')}
           className={`px-3.5 py-2 text-xs font-bold rounded-lg flex items-center gap-2 fast-transition cursor-pointer shrink-0 ${
-            subTab === 'docs'
+            subTab === 'webhooks'
               ? 'bg-slate-900 dark:bg-[#fed700] text-white dark:text-slate-950 shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
@@ -218,7 +218,7 @@ export default function DevelopersView({
       )}
 
       {/* SubTab 3: OpenAPI Specs */}
-      {subTab === 'docs' && (
+      {subTab === 'webhooks' && (
         <div className="bg-white dark:bg-[#141416] border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs space-y-4 text-xs fast-transition">
           <div className="p-4 bg-indigo-50 dark:bg-amber-500/10 border border-indigo-200 dark:border-amber-500/30 rounded-xl space-y-2">
             <h4 className="text-sm font-bold text-indigo-950 dark:text-[#fed700]">utoipa Rust OpenAPI v3.1 Specifications</h4>

@@ -1,24 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  ShieldCheck,
-  KeyRound,
-  Lock,
-  Mail,
-  ArrowRight,
-  UserCheck,
-  Sparkles,
-  Building2,
-  CheckCircle2,
-  Sun,
-  Moon,
-  Zap,
-  Activity,
-  Layers,
-  ArrowUpRight,
-  Check,
-} from 'lucide-react';
+import { Eye, EyeOff, Moon, Sun } from 'lucide-react';
 
 interface AuthViewProps {
   onLoginSuccess: (userRole: string, tokenType: 'dash' | 'admin') => void;
@@ -26,36 +9,65 @@ interface AuthViewProps {
   onToggleTheme?: () => void;
 }
 
+const DEMO_ACCOUNTS = [
+  { role: 'Owner', label: 'Merchant owner', email: 'sarah.jenkins@acmefintech.io' },
+  { role: 'Developer', label: 'Developer', email: 'm.chen@acmefintech.io' },
+];
+
+const CAPABILITIES = [
+  { term: 'Collections', detail: 'Dynamic NGN virtual accounts that expire in 30 minutes.' },
+  { term: 'Payouts', detail: 'USDT on TRON and fiat to any Nigerian bank, same balance.' },
+  { term: 'Ledger', detail: 'Double-entry postings with signed, replayable webhooks.' },
+];
+
 export default function AuthView({ onLoginSuccess, theme = 'dark', onToggleTheme }: AuthViewProps) {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [step, setStep] = useState<'credentials' | 'totp'>('credentials');
 
-  // Form fields
   const [email, setEmail] = useState('sarah.jenkins@acmefintech.io');
-  const [password, setPassword] = useState('••••••••••••');
+  const [password, setPassword] = useState('fluxel-demo-2024');
+  const [showPassword, setShowPassword] = useState(false);
   const [businessName, setBusinessName] = useState('Acme Fintech Solutions');
   const [totpCode, setTotpCode] = useState('');
-  const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const isLogin = authMode === 'login';
+
+  const switchMode = (mode: 'login' | 'signup') => {
+    setAuthMode(mode);
+    setStep('credentials');
+    setError('');
+    setNotice('');
+  };
 
   const handleCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Please enter your email and password.');
+    if (!email.trim() || !password) {
+      setError('Enter your email and password to continue.');
       return;
     }
     setError('');
+    setNotice('');
+    setTotpCode('');
     setStep('totp');
   };
 
-  const handleTotpSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (totpCode.length !== 6 || !/^\d+$/.test(totpCode)) {
-      setError('Please enter a valid 6-digit TOTP code (e.g. 123456).');
+  const submitTotp = (code: string) => {
+    if (code.length !== 6) {
+      setError('Enter the 6-digit code from your authenticator app.');
       return;
     }
     setError('');
     onLoginSuccess('Owner', 'dash');
+  };
+
+  const handleTotpChange = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 6);
+    setTotpCode(digits);
+    if (error) setError('');
+    if (digits.length === 6) submitTotp(digits);
   };
 
   const handleQuickLogin = (role: string, demoEmail: string) => {
@@ -63,384 +75,314 @@ export default function AuthView({ onLoginSuccess, theme = 'dark', onToggleTheme
     onLoginSuccess(role, 'dash');
   };
 
+  const inputClass =
+    'w-full h-12 px-3.5 rounded-lg bg-white dark:bg-[#141416] border border-slate-300 dark:border-[#2a2a30] ' +
+    'text-base sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 ' +
+    'outline-none focus:border-slate-900 dark:focus:border-[#fed700] focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-[#fed700]/20 ' +
+    'transition-colors';
+
+  const labelClass = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2';
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0d0d0d] text-slate-900 dark:text-slate-100 flex flex-col lg:flex-row font-sans selection:bg-amber-500/20 selection:text-amber-400 fast-transition">
-      {/* ---------------------------------------------------- */}
-      {/* LEFT COLUMN: Visual Showcase / Image & Hero Section (Desktop Mode) */}
-      {/* ---------------------------------------------------- */}
-      <div className="lg:w-[55%] xl:w-[58%] bg-[#0a0a0c] text-white p-8 lg:p-14 flex flex-col justify-between relative overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800 dark:border-[#222226]">
-        {/* Glowing Background Elements derived from Logo Gold */}
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#fed700]/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-1/2 -right-32 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 left-1/3 w-80 h-80 bg-[#fed700]/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-svh bg-white dark:bg-[#0d0d0d] text-slate-900 dark:text-slate-100 lg:grid lg:grid-cols-[1.1fr_1fr] xl:grid-cols-[1.25fr_1fr]">
+      {/* -------------------------------------------------- */}
+      {/* Brand panel — desktop only. Mobile goes straight to the form. */}
+      {/* -------------------------------------------------- */}
+      <aside className="hidden lg:flex flex-col justify-between bg-[#0a0a0b] text-white p-12 xl:p-16 relative overflow-hidden">
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, #fff 1px, transparent 1px), linear-gradient(to bottom, #fff 1px, transparent 1px)',
+            backgroundSize: '56px 56px',
+            maskImage: 'radial-gradient(ellipse 80% 60% at 30% 20%, #000, transparent 75%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 30% 20%, #000, transparent 75%)',
+          }}
+        />
 
-        {/* Top Branding Bar */}
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="relative">
-              <img
-                src="/fluxel_logo.png"
-                alt="Fluxel Platform Logo"
-                className="w-11 h-11 rounded-xl object-cover border border-[#fed700]/40 shadow-lg gold-glow"
-              />
-              <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#0a0a0c] rounded-full"></span>
-            </div>
-            <div>
-              <span className="text-xl font-black tracking-wider text-white flex items-center gap-1.5 leading-none">
-                FLUXEL <span className="text-[#fed700]">PAYMENTS</span>
-              </span>
-              <span className="text-[11px] text-slate-400 font-medium tracking-widest uppercase block mt-1">
-                Merchant Infrastructure Rail
-              </span>
-            </div>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-[#fed700]/30 text-xs text-amber-300 font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>API SLA: 99.99% Operational</span>
-          </div>
+        <div className="relative flex items-center gap-3">
+          <img
+            src="/fluxel_logo.png"
+            alt=""
+            className="w-9 h-9 rounded-lg object-cover"
+          />
+          <span className="text-[15px] font-semibold tracking-tight">
+            Fluxel <span className="text-slate-500 font-normal">Payments</span>
+          </span>
         </div>
 
-        {/* Hero Visual Card & Showcase */}
-        <div className="relative z-10 my-10 lg:my-auto space-y-8 max-w-2xl">
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#fed700]/10 border border-[#fed700]/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Multi-Asset Merchant Core</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.15]">
-              Unified Fiat & Crypto Settlement Engine.
-            </h1>
-            <p className="text-sm sm:text-base text-slate-300 font-normal leading-relaxed">
-              Automate dynamic NGN virtual account generation, instant USDT liquidity payouts, and double-entry ledger audits with sub-150ms webhook dispatch.
-            </p>
-          </div>
+        <div className="relative max-w-lg">
+          <h1 className="text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.1] text-white">
+            Naira and stablecoins on one balance sheet.
+          </h1>
+          <p className="mt-5 text-[15px] leading-relaxed text-slate-400">
+            The merchant console for Fluxel&apos;s settlement rail — collections, payouts, and
+            reconciliation without running two treasuries.
+          </p>
 
-          {/* Interactive Live Rails Visual Card */}
-          <div className="bg-[#141416]/90 backdrop-blur-md rounded-2xl border border-slate-800 p-5 space-y-4 shadow-2xl gold-border-glow">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800/80 text-xs">
-              <div className="flex items-center gap-2 text-slate-300 font-mono">
-                <Activity className="w-4 h-4 text-[#fed700]" />
-                <span className="font-bold text-white">LIVE LEDGER STREAM</span>
+          <dl className="mt-12 border-t border-white/10">
+            {CAPABILITIES.map(({ term, detail }) => (
+              <div key={term} className="grid grid-cols-[7.5rem_1fr] gap-6 py-4 border-b border-white/10">
+                <dt className="text-sm font-medium text-[#fed700]">{term}</dt>
+                <dd className="text-sm text-slate-400 leading-relaxed">{detail}</dd>
               </div>
-              <span className="text-[11px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded font-mono">
-                Lenco MFB & TRON Rail
-              </span>
-            </div>
-
-            {/* Mock Live Stream Items */}
-            <div className="space-y-2.5 text-xs font-mono">
-              <div className="p-3 rounded-xl bg-[#1a1a1e] border border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
-                    NGN
-                  </div>
-                  <div>
-                    <div className="text-white font-bold text-xs">fdi_99A101 · Amina Bello</div>
-                    <div className="text-[10px] text-slate-400">Dynamic VA: 8091442901 (Lenco MFB)</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-emerald-400 font-bold">+₦50,000.00</div>
-                  <div className="text-[10px] text-slate-400">200 OK ACK (42ms)</div>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#1a1a1e] border border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-[#fed700] flex items-center justify-center font-bold">
-                    USDT
-                  </div>
-                  <div>
-                    <div className="text-white font-bold text-xs">txn_0089AB · Internal Transfer</div>
-                    <div className="text-[10px] text-slate-400">TRON TRX20 · Double Entry Posted</div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[#fed700] font-bold">+2,500.00 USDT</div>
-                  <div className="text-[10px] text-slate-400">Ledger Balanced</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Key Value Prop Feature Badges */}
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80">
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
-                <Check className="w-3.5 h-3.5 text-[#fed700]" />
-                <span>30-Min Dynamic VAs</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
-                <Check className="w-3.5 h-3.5 text-[#fed700]" />
-                <span>TOTP Step-Up MFA</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
-                <Check className="w-3.5 h-3.5 text-[#fed700]" />
-                <span>Signed Webhooks</span>
-              </div>
-            </div>
-          </div>
+            ))}
+          </dl>
         </div>
 
-        {/* Footer info in Hero panel */}
-        <div className="relative z-10 pt-4 text-xs text-slate-400 flex items-center justify-between border-t border-slate-800/60">
-          <span>&copy; {new Date().getFullYear()} Fluxel Technology Solutions.</span>
-          <span className="font-mono text-[11px] text-slate-400">ADR-021 Merchant Spec v2.4</span>
+        <div className="relative flex items-center justify-between text-xs text-slate-600">
+          <span>&copy; {new Date().getFullYear()} Fluxel Technology Solutions</span>
+          <span className="font-mono">Merchant spec v2.4</span>
         </div>
-      </div>
+      </aside>
 
-      {/* ---------------------------------------------------- */}
-      {/* RIGHT COLUMN: Authentication Form Section */}
-      {/* ---------------------------------------------------- */}
-      <div className="lg:w-[45%] xl:w-[42%] bg-white dark:bg-[#0d0d0d] p-6 sm:p-10 lg:p-14 flex flex-col justify-between relative fast-transition">
-        {/* Top Header Row with Theme Toggle */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-2 lg:hidden">
-            <img
-              src="/fluxel_logo.png"
-              alt="Fluxel Logo"
-              className="w-8 h-8 rounded-lg object-cover border border-slate-300 dark:border-amber-500/40"
-            />
-            <span className="font-extrabold text-base tracking-wider text-slate-900 dark:text-white">
-              FLUXEL
+      {/* -------------------------------------------------- */}
+      {/* Auth form */}
+      {/* -------------------------------------------------- */}
+      <main className="min-h-svh flex flex-col px-5 pt-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-8 lg:px-12 lg:py-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 lg:invisible">
+            <img src="/fluxel_logo.png" alt="" className="w-8 h-8 rounded-lg object-cover" />
+            <span className="text-[15px] font-semibold tracking-tight">
+              Fluxel <span className="text-slate-400 dark:text-slate-500 font-normal">Payments</span>
             </span>
           </div>
 
-          <div className="hidden lg:block">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              Merchant Authentication Portal
-            </span>
-          </div>
-
-          {/* Theme Toggle Control */}
           {onToggleTheme && (
             <button
+              type="button"
               onClick={onToggleTheme}
-              title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Mode (Logo Palette)'}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#18181b] border border-slate-200 dark:border-[#2a2a30] text-xs font-semibold text-slate-700 dark:text-amber-400 hover:bg-slate-200 dark:hover:bg-[#222228] fast-transition cursor-pointer"
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              className="w-11 h-11 -mr-2 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#18181b] hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
             >
-              {theme === 'dark' ? (
-                <>
-                  <Sun className="w-4 h-4 text-amber-400" />
-                  <span>Light Mode</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-4 h-4 text-slate-700" />
-                  <span>Dark Mode</span>
-                </>
-              )}
+              {theme === 'dark' ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
             </button>
           )}
         </div>
 
-        {/* Card Container */}
-        <div className="my-auto max-w-md w-full mx-auto space-y-6">
-          {/* Mode Tabs: Sign In vs Create Account */}
-          <div className="flex items-center bg-slate-100 dark:bg-[#141416] p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
-            <button
-              onClick={() => {
-                setAuthMode('login');
-                setStep('credentials');
-                setError('');
-              }}
-              className={`flex-1 py-2.5 rounded-lg fast-transition cursor-pointer text-center ${
-                authMode === 'login'
-                  ? 'bg-white dark:bg-[#fed700] text-slate-900 dark:text-slate-950 shadow-xs font-extrabold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => {
-                setAuthMode('signup');
-                setStep('credentials');
-                setError('');
-              }}
-              className={`flex-1 py-2.5 rounded-lg fast-transition cursor-pointer text-center ${
-                authMode === 'signup'
-                  ? 'bg-white dark:bg-[#fed700] text-slate-900 dark:text-slate-950 shadow-xs font-extrabold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Create Business Account
-            </button>
-          </div>
+        <div className="flex-1 flex flex-col justify-center py-10 lg:py-0">
+          <div className="w-full max-w-[26rem] mx-auto">
+            {step === 'credentials' ? (
+              <>
+                <header className="mb-8">
+                  <h2 className="text-[1.75rem] sm:text-3xl font-semibold tracking-tight">
+                    {isLogin ? 'Sign in' : 'Create your account'}
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                    {isLogin
+                      ? 'Use your merchant work email. You’ll confirm with your authenticator app.'
+                      : 'Register your business to start KYB. Verification usually takes a day.'}
+                  </p>
+                </header>
 
-          {step === 'credentials' ? (
-            <form onSubmit={handleCredentialsSubmit} className="space-y-4">
-              {authMode === 'signup' && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                    Registered Business Name
-                  </label>
-                  <div className="relative">
-                    <Building2 className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400 dark:text-slate-500" />
+                <form onSubmit={handleCredentialsSubmit} className="space-y-5" noValidate>
+                  {!isLogin && (
+                    <div>
+                      <label htmlFor="business" className={labelClass}>
+                        Registered business name
+                      </label>
+                      <input
+                        id="business"
+                        name="organization"
+                        type="text"
+                        autoComplete="organization"
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        placeholder="Acme Fintech Ltd"
+                        className={inputClass}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label htmlFor="email" className={labelClass}>
+                      Work email
+                    </label>
                     <input
-                      type="text"
-                      required
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="e.g. Acme Fintech Ltd"
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-[#141416] border border-slate-300 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-400 dark:focus:ring-[#fed700] focus:bg-white dark:focus:bg-[#18181b] outline-none fast-transition"
+                      id="email"
+                      name="email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      className={inputClass}
                     />
                   </div>
-                </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                  Merchant Work Email
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400 dark:text-slate-500" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="sarah.jenkins@acmefintech.io"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-[#141416] border border-slate-300 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-amber-400 dark:focus:ring-[#fed700] focus:bg-white dark:focus:bg-[#18181b] outline-none fast-transition"
-                  />
-                </div>
-              </div>
+                  <div>
+                    <div className="flex items-baseline justify-between gap-4 mb-2">
+                      <label htmlFor="password" className={labelClass + ' mb-0'}>
+                        Password
+                      </label>
+                      {isLogin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setError('');
+                            setNotice('If that email is registered, reset instructions are on the way.');
+                          }}
+                          className="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white underline underline-offset-4 decoration-slate-300 dark:decoration-slate-700 cursor-pointer"
+                        >
+                          Forgot?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete={isLogin ? 'current-password' : 'new-password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className={inputClass + ' pr-12'}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+                      </button>
+                    </div>
+                  </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                    Password
+                  <label className="flex items-center gap-3 py-1 cursor-pointer select-none w-fit">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="size-4 rounded border-slate-300 dark:border-slate-700 dark:bg-[#141416] text-slate-900 dark:text-[#fed700] focus:ring-2 focus:ring-slate-900/20 dark:focus:ring-[#fed700]/30"
+                    />
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Keep me signed in on this device</span>
                   </label>
-                  {authMode === 'login' && (
-                    <button
-                      type="button"
-                      onClick={() => setError('Password reset instructions sent to your email.')}
-                      className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-semibold cursor-pointer"
+
+                  {(error || notice) && (
+                    <p
+                      role="alert"
+                      className={
+                        error
+                          ? 'text-sm text-rose-600 dark:text-rose-400'
+                          : 'text-sm text-slate-600 dark:text-slate-400'
+                      }
                     >
-                      Forgot Password?
-                    </button>
+                      {error || notice}
+                    </p>
                   )}
-                </div>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400 dark:text-slate-500" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-[#141416] border border-slate-300 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-400 dark:focus:ring-[#fed700] focus:bg-white dark:focus:bg-[#18181b] outline-none fast-transition"
-                  />
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="rounded border-slate-300 dark:border-slate-700 text-amber-500 focus:ring-amber-400 dark:bg-[#141416]"
-                  />
-                  <span>Remember this browser session</span>
-                </label>
-              </div>
+                  <button
+                    type="submit"
+                    className="w-full h-12 rounded-lg bg-slate-900 dark:bg-[#fed700] text-white dark:text-slate-950 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-[#ffe23d] active:scale-[0.99] transition cursor-pointer"
+                  >
+                    {isLogin ? 'Continue' : 'Create account'}
+                  </button>
+                </form>
 
-              {error && (
-                <p className="text-xs text-amber-700 dark:text-amber-300 font-medium bg-amber-50 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-200 dark:border-amber-900/50">
-                  {error}
+                <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
+                  {isLogin ? 'No account yet?' : 'Already registered?'}{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchMode(isLogin ? 'signup' : 'login')}
+                    className="font-medium text-slate-900 dark:text-white underline underline-offset-4 decoration-slate-300 dark:decoration-slate-600 hover:decoration-slate-900 dark:hover:decoration-white cursor-pointer"
+                  >
+                    {isLogin ? 'Register a business' : 'Sign in'}
+                  </button>
                 </p>
-              )}
 
-              <button
-                type="submit"
-                className="w-full py-3 bg-slate-900 dark:bg-[#fed700] hover:bg-slate-800 dark:hover:bg-amber-300 text-white dark:text-slate-950 rounded-xl text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg flex items-center justify-center gap-2 fast-transition cursor-pointer"
-              >
-                <span>{authMode === 'login' ? 'Sign In & Verify TOTP' : 'Create Account & Begin KYB'}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleTotpSubmit} className="space-y-4 animate-in fade-in duration-150">
-              <div className="text-center space-y-1.5 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40">
-                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 w-fit mx-auto">
-                  <ShieldCheck className="w-6 h-6" />
+                <div className="mt-10 pt-6 border-t border-slate-200 dark:border-[#1e1e22]">
+                  <p className="text-sm text-slate-400 dark:text-slate-500 mb-3">Demo accounts</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {DEMO_ACCOUNTS.map(({ role, label, email: demoEmail }) => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => handleQuickLogin(role, demoEmail)}
+                        className="min-h-12 px-3.5 py-2.5 rounded-lg border border-slate-200 dark:border-[#1e1e22] hover:border-slate-400 dark:hover:border-[#3a3a42] hover:bg-slate-50 dark:hover:bg-[#141416] text-left transition-colors cursor-pointer"
+                      >
+                        <span className="block text-sm font-medium">{label}</span>
+                        <span className="block text-xs text-slate-500 dark:text-slate-500 truncate">{demoEmail}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">MFA Authenticator Step-Up</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Enter 6-digit code from your authenticator app (e.g. 123456)
-                </p>
-              </div>
+              </>
+            ) : (
+              <div className="animate-in fade-in duration-150">
+                <header className="mb-8">
+                  <h2 className="text-[1.75rem] sm:text-3xl font-semibold tracking-tight">Two-factor code</h2>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Open your authenticator app and enter the 6-digit code for{' '}
+                    <span className="text-slate-900 dark:text-slate-200 break-all">{email}</span>.
+                  </p>
+                </header>
 
-              <div>
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 absolute left-3.5 top-4 text-slate-400 dark:text-slate-500" />
-                  <input
-                    type="text"
-                    maxLength={6}
-                    required
-                    value={totpCode}
-                    onChange={(e) => setTotpCode(e.target.value)}
-                    placeholder="123456"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-[#141416] border border-slate-300 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white font-mono tracking-widest text-xl font-bold text-center focus:ring-2 focus:ring-amber-400 dark:focus:ring-[#fed700] outline-none"
-                    autoFocus
-                  />
-                </div>
-                {error && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1.5 font-medium">{error}</p>}
-              </div>
-
-              <div className="flex items-center justify-between pt-2">
-                <button
-                  type="button"
-                  onClick={() => setStep('credentials')}
-                  className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitTotp(totpCode);
+                  }}
+                  className="space-y-5"
                 >
-                  &larr; Back
-                </button>
+                  <div>
+                    <label htmlFor="totp" className="sr-only">
+                      6-digit authentication code
+                    </label>
+                    <input
+                      id="totp"
+                      name="one-time-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={totpCode}
+                      onChange={(e) => handleTotpChange(e.target.value)}
+                      placeholder="000000"
+                      autoFocus
+                      className="w-full h-16 rounded-lg bg-white dark:bg-[#141416] border border-slate-300 dark:border-[#2a2a30] text-center font-mono text-2xl tracking-[0.5em] indent-[0.5em] text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 outline-none focus:border-slate-900 dark:focus:border-[#fed700] focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-[#fed700]/20 transition-colors"
+                    />
+                  </div>
 
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-slate-900 dark:bg-[#fed700] hover:bg-slate-800 dark:hover:bg-amber-300 text-white dark:text-slate-950 rounded-xl text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg cursor-pointer"
-                >
-                  Verify & Enter Dashboard
-                </button>
+                  {error && (
+                    <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+                      {error}
+                    </p>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full h-12 rounded-lg bg-slate-900 dark:bg-[#fed700] text-white dark:text-slate-950 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-[#ffe23d] active:scale-[0.99] transition cursor-pointer"
+                  >
+                    Verify and continue
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('credentials');
+                      setError('');
+                    }}
+                    className="w-full min-h-11 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+                  >
+                    Back to sign in
+                  </button>
+                </form>
               </div>
-            </form>
-          )}
-
-          {/* Quick Demo Login Presets */}
-          <div className="pt-5 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
-            <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block text-center">
-              Quick Demo One-Click Logins
-            </span>
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('Owner', 'sarah.jenkins@acmefintech.io')}
-                className="p-3 bg-slate-50 dark:bg-[#141416] hover:bg-amber-50 dark:hover:bg-amber-500/10 border border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-500/40 rounded-xl text-left text-xs fast-transition cursor-pointer"
-              >
-                <span className="font-bold text-slate-900 dark:text-white block">Merchant Owner</span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">sarah@acmefintech.io</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('Developer', 'm.chen@acmefintech.io')}
-                className="p-3 bg-slate-50 dark:bg-[#141416] hover:bg-amber-50 dark:hover:bg-amber-500/10 border border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-500/40 rounded-xl text-left text-xs fast-transition cursor-pointer"
-              >
-                <span className="font-bold text-slate-900 dark:text-white block">Developer</span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">m.chen@acmefintech.io</span>
-              </button>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Mobile bottom info */}
-        <div className="pt-6 text-center lg:hidden">
-          <p className="text-xs text-slate-400 dark:text-slate-500">
-            &copy; {new Date().getFullYear()} Fluxel Platform · Secure AES-256 Encrypted
-          </p>
-        </div>
-      </div>
+        <p className="text-xs text-slate-400 dark:text-slate-600 text-center lg:hidden">
+          &copy; {new Date().getFullYear()} Fluxel Technology Solutions
+        </p>
+      </main>
     </div>
   );
 }
