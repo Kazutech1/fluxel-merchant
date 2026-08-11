@@ -46,7 +46,7 @@ export default function Sidebar({
       id: 'payouts',
       label: 'Payouts & Holds',
       icon: <Send className="w-4 h-4" />,
-      badge: pendingReviewCount > 0 ? pendingReviewCount : undefined,
+      //badge: pendingReviewCount > 0 ? pendingReviewCount : undefined,
     },
     { id: 'transfers', label: 'Transfers', icon: <ArrowLeftRight className="w-4 h-4" /> },
     { id: 'developers', label: 'Developer Portal', icon: <Code2 className="w-4 h-4" /> },

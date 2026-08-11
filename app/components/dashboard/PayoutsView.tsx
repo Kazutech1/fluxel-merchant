@@ -63,7 +63,7 @@ export default function PayoutsView({ pendingHolds, onInitiatePayout }: PayoutsV
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
       {/* Risk Queue Review Holds Notice Banner (Doc 13) */}
-      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4 sm:p-5 space-y-3 shadow-xs fast-transition">
+      {/* <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl p-4 sm:p-5 space-y-3 shadow-xs fast-transition">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -104,7 +104,7 @@ export default function PayoutsView({ pendingHolds, onInitiatePayout }: PayoutsV
             ))}
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* Payout Initiation Form */}
       <div className="bg-white dark:bg-[#141416] border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-6 shadow-xs max-w-2xl space-y-6 fast-transition">
