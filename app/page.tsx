@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import AuthView from './components/auth/AuthView';
 import Sidebar, { TabType } from './components/common/Sidebar';
 import Header from './components/common/Header';
@@ -16,6 +16,20 @@ import StepUpTotpModal from './components/common/StepUpTotpModal';
 import RevealKeyModal from './components/common/RevealKeyModal';
 import TestFireWebhookModal from './components/common/TestFireWebhookModal';
 import QrCodeModal from './components/common/QrCodeModal';
+import PaymentLinkModal from './components/common/PaymentLinkModal';
+
+import {
+  PaymentSession,
+  createSession,
+  upsertSession,
+  useSessions,
+} from './lib/paymentSessions';
+import {
+  sessionToIntent,
+  sessionToTransaction,
+  sortByCreatedDesc,
+} from './lib/sessionAdapters';
+import { toggleTheme, useTheme } from './lib/theme';
 
 import {
   initialBalances,
@@ -47,30 +61,11 @@ import {
 import { CheckCircle2, X, QrCode, Building2 } from 'lucide-react';
 
 export default function App() {
-  // Theme State (Dark Mode default based on Logo obsidian black & gold accent palette)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('fluxel_theme') as 'dark' | 'light' | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
-    } else {
-      setTheme('dark');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('fluxel_theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
+  // Theme lives in an external store (see lib/theme.ts) so the /pay route —
+  // a separate React tree — reads the same value, and the class is already on
+  // <html> before first paint via the bootstrap script in layout.tsx.
+  const theme = useTheme();
+  const toggleThemeHandler = () => toggleTheme(theme);
 
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -99,9 +94,27 @@ export default function App() {
   const [showCreateIntentModal, setShowCreateIntentModal] = useState(false);
   const [intentCustomer, setIntentCustomer] = useState(customers[0]?.id || '');
   const [intentAmount, setIntentAmount] = useState('50000');
+  const [intentDescription, setIntentDescription] = useState('Marketplace order settlement');
 
   // Created Intent QR Modal State
   const [intentQrData, setIntentQrData] = useState<{ title: string; subtitle: string; payload: string } | null>(null);
+
+  // Hosted-checkout payment requests. Lives in localStorage so the /pay route —
+  // a separate React tree, usually a separate tab — writes back here live.
+  const checkoutSessions = useSessions();
+  const [createdLink, setCreatedLink] = useState<PaymentSession | null>(null);
+
+  const allIntents = useMemo(
+    () => sortByCreatedDesc([...Object.values(checkoutSessions).map(sessionToIntent), ...intents]),
+    [checkoutSessions, intents]
+  );
+
+  const allTransactions = useMemo(() => {
+    const fromCheckout = Object.values(checkoutSessions)
+      .map(sessionToTransaction)
+      .filter((t): t is Transaction => t !== null);
+    return sortByCreatedDesc([...fromCheckout, ...transactions]);
+  }, [checkoutSessions, transactions]);
 
   // Security Step-Up
   const [pendingStepUpAction, setPendingStepUpAction] = useState<(() => void) | null>(null);
@@ -144,39 +157,28 @@ export default function App() {
     }
   };
 
-  // 1. Create Deposit Intent
+  // 1. Create Deposit Intent — issues a hosted checkout link the customer can pay on.
+  const createPaymentRequest = (customerId: string, amountNaira: string, description?: string) => {
+    const cust = customers.find((c) => c.id === customerId) || customers[0];
+    const kobo = Math.round(parseFloat(amountNaira || '0') * 100).toString();
+
+    const session = createSession({
+      merchantName: settings.business_name,
+      customerId: cust.id,
+      customerName: cust.name,
+      expectedAmount: kobo,
+      description,
+    });
+
+    upsertSession(session);
+    setShowCreateIntentModal(false);
+    setCreatedLink(session);
+    showToast(`Payment request ${session.reference} created — share the link to collect`);
+  };
+
   const handleCreateIntentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cust = customers.find((c) => c.id === intentCustomer) || customers[0];
-    const newId = `fdi_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    const kobo = (parseFloat(intentAmount) * 100).toString();
-    const acctNum = `8091${Math.floor(100000 + Math.random() * 900000)}`;
-
-    const newIntent: DepositIntent = {
-      id: newId,
-      customer_id: cust.id,
-      customer_name: cust.name,
-      asset_code: 'NGN',
-      expected_amount: kobo,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 30 * 60000).toISOString(),
-      account_number: acctNum,
-      bank_name: 'Lenco MFB',
-      account_name: `FLUXEL / ${cust.name.toUpperCase()} (${newId})`,
-      qr_payload: `NGN:${acctNum}:Lenco:${kobo}`,
-    };
-
-    setIntents([newIntent, ...intents]);
-    setShowCreateIntentModal(false);
-    showToast(`Dynamic Deposit Intent ${newId} created (30-min validity)`);
-
-    // Launch QR Code Modal immediately for payment
-    setIntentQrData({
-      title: `Dynamic NGN VA: ${acctNum}`,
-      subtitle: `Lenco MFB · FLUXEL / ${cust.name.toUpperCase()} · Expires in 30 mins`,
-      payload: `NGN:${acctNum}:Lenco:${kobo}`,
-    });
+    createPaymentRequest(intentCustomer, intentAmount, intentDescription);
   };
 
   // 2. Manual Customer Balance Adjustment
@@ -306,7 +308,7 @@ export default function App() {
 
   // Render Auth Page if not logged in
   if (!isAuthenticated) {
-    return <AuthView onLoginSuccess={handleLoginSuccess} theme={theme} onToggleTheme={toggleTheme} />;
+    return <AuthView onLoginSuccess={handleLoginSuccess} theme={theme} onToggleTheme={toggleThemeHandler} />;
   }
 
   const tabTitles: Record<TabType, string> = {
@@ -352,15 +354,15 @@ export default function App() {
           onLogout={handleLogout}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           theme={theme}
-          onToggleTheme={toggleTheme}
+          onToggleTheme={toggleThemeHandler}
         />
 
         <main className="p-8 max-w-7xl w-full mx-auto flex-1">
           {activeTab === 'overview' && (
             <OverviewView
               balances={balances}
-              recentTransactions={transactions}
-              recentIntents={intents}
+              recentTransactions={allTransactions}
+              recentIntents={allIntents}
               businessSettings={settings}
               onNavigateTab={setActiveTab}
               onRequestCreateIntent={() => setShowCreateIntentModal(true)}
@@ -371,8 +373,8 @@ export default function App() {
           {activeTab === 'customers' && (
             <CustomersView
               customers={customers}
-              transactions={transactions}
-              intents={intents}
+              transactions={allTransactions}
+              intents={allIntents}
               onToggleCustomerFreeze={(id, reason) => {
                 setCustomers(customers.map((c) => (c.id === id ? { ...c, status: c.status === 'active' ? 'frozen' : 'active' } : c)));
                 showToast(`Customer status updated. Reason: "${reason}"`);
@@ -399,17 +401,13 @@ export default function App() {
                 showToast(`Customer ${name} provisioned`);
               }}
               onManualBalanceAdjustment={handleManualBalanceAdjustment}
-              onIssueDepositIntent={(id, amt) => {
-                setIntentCustomer(id);
-                setIntentAmount(amt);
-                handleCreateIntentSubmit(new Event('submit') as any);
-              }}
+              onIssueDepositIntent={(id, amt) => createPaymentRequest(id, amt)}
             />
           )}
 
           {activeTab === 'transactions' && (
             <TransactionsView
-              transactions={transactions}
+              transactions={allTransactions}
               businessName={settings.business_name}
               onQueryProviderStatus={(id) => showToast(`Live provider status queried for ${id}: HTTP 200 Settled`)}
               onReplayWebhook={(corId) => showToast(`Outbound webhook event replayed for ${corId}`)}
@@ -490,6 +488,8 @@ export default function App() {
         onClose={() => setIntentQrData(null)}
       />
 
+      <PaymentLinkModal session={createdLink} onClose={() => setCreatedLink(null)} />
+
       {/* Create Dynamic Deposit Intent Modal Dialog */}
       {showCreateIntentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs fast-transition">
@@ -527,6 +527,22 @@ export default function App() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
+                  What is this for?
+                </label>
+                <input
+                  type="text"
+                  value={intentDescription}
+                  onChange={(e) => setIntentDescription(e.target.value)}
+                  placeholder="Marketplace order settlement"
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 rounded-lg text-sm text-slate-900 dark:text-white outline-none"
+                />
+                <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  Shown to the customer as the invoice line item.
+                </p>
               </div>
 
               <div>
