@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
-import { Check, Clock3, TriangleAlert } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, Check, Clock3, TriangleAlert } from 'lucide-react';
 import { PaymentSession, RAILS, formatQuote } from '../../lib/paymentSessions';
 import { AssetCode } from '../../types/dashboard';
 import { getAssetSymbol } from '../common/MinorUnitFormatter';
@@ -11,6 +12,9 @@ interface ResultPanelProps {
   session: PaymentSession;
   onRestart: () => void;
 }
+
+/** How long the payer gets to read the receipt before being sent back. */
+const REDIRECT_MS = 5_000;
 
 function money(amount: string, asset: AssetCode): string {
   const symbol = asset === 'NGN' ? getAssetSymbol(asset) : '';
@@ -28,8 +32,42 @@ function subtract(a: string, b: string): string {
 }
 
 export default function ResultPanel({ session, onRestart }: ResultPanelProps) {
-  const rail = session.method ? RAILS[session.method] : undefined;
-  const paidAsset = session.paid_asset ?? session.asset_code;
+  const rail = RAILS[session.asset_code];
+  const paidAsset = session.asset_code;
+
+  const router = useRouter();
+  const returnUrl = session.return_url || '/';
+
+  // Derived from completed_at rather than held in state, so the countdown
+  // survives a re-render and needs no setState inside an effect body.
+  const deadline = session.completed_at
+    ? new Date(session.completed_at).getTime() + REDIRECT_MS
+    : null;
+  const [now, setNow] = useState(() => Date.now());
+
+  const leave = React.useCallback(() => {
+    if (/^https?:\/\//i.test(returnUrl)) window.location.assign(returnUrl);
+    else router.push(returnUrl);
+  }, [returnUrl, router]);
+
+  useEffect(() => {
+    if (session.status !== 'completed' || !deadline) return;
+    // Revisiting an old receipt link shouldn't bounce the payer instantly.
+    if (Date.now() >= deadline) return;
+
+    const timer = setInterval(() => {
+      const tick = Date.now();
+      setNow(tick);
+      if (tick >= deadline) {
+        clearInterval(timer);
+        leave();
+      }
+    }, 250);
+
+    return () => clearInterval(timer);
+  }, [session.status, deadline, leave]);
+
+  const secondsLeft = deadline ? Math.max(0, Math.ceil((deadline - now) / 1000)) : 0;
 
   /* ------------------------------- expired ------------------------------- */
   if (session.status === 'expired') {
@@ -114,14 +152,25 @@ export default function ResultPanel({ session, onRestart }: ResultPanelProps) {
       <div className="mt-5 rounded-xl border border-slate-200 dark:border-[#1e1e22] px-4 divide-y divide-slate-200 dark:divide-[#1e1e22]">
         <div className="flex items-center justify-between gap-3 py-3 min-h-12">
           <span className="text-xs text-slate-500 dark:text-slate-400">Paid with</span>
-          <span className="text-sm text-right">{rail ? `${rail.label} · ${rail.network}` : '—'}</span>
+          <span className="text-sm text-right">{`${rail.label} · ${rail.network}`}</span>
         </div>
         <CopyField label="Order" value={session.order_ref} />
         <CopyField label="Reference" value={session.correlation_id} />
       </div>
 
-      <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
-        A receipt has been sent to {session.customer_name}.
+      <button
+        type="button"
+        onClick={leave}
+        className="mt-5 w-full h-12 rounded-lg bg-slate-900 dark:bg-[#fed700] text-white dark:text-slate-950 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-[#ffe23d] active:scale-[0.99] transition inline-flex items-center justify-center gap-2 cursor-pointer"
+      >
+        Return to {session.merchant_name}
+        <ArrowRight className="w-4 h-4" />
+      </button>
+
+      <p className="mt-3 text-xs text-slate-400 dark:text-slate-500 text-center">
+        {secondsLeft > 0
+          ? `Taking you back in ${secondsLeft}s…`
+          : `A receipt has been sent to ${session.customer_name}.`}
       </p>
     </div>
   );

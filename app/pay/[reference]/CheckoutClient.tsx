@@ -4,21 +4,20 @@ import React from 'react';
 import { SearchX } from 'lucide-react';
 import {
   CheckoutStatus,
-  CryptoMethod,
   createDemoSession,
-  isCryptoMethod,
+  isCryptoAsset,
   usePaymentSession,
 } from '../../lib/paymentSessions';
 import {
+  markCompleted,
   markExpired,
+  requestDepositAddress,
   requestVirtualAccount,
   restartSession,
-  selectMethod,
   useDemoDriver,
 } from '../../lib/checkoutDemo';
 import { useDemoEnabled, useIsHydrated } from '../../lib/clientEnv';
 import CheckoutShell from '../../components/checkout/CheckoutShell';
-import MethodTabs, { MethodTab } from '../../components/checkout/MethodTabs';
 import BankTransferPanel from '../../components/checkout/BankTransferPanel';
 import CryptoPanel from '../../components/checkout/CryptoPanel';
 import ResultPanel from '../../components/checkout/ResultPanel';
@@ -29,7 +28,6 @@ interface CheckoutClientProps {
 }
 
 const HEADINGS: Record<CheckoutStatus, string> = {
-  awaiting_method: 'Awaiting payment',
   awaiting_payment: 'Awaiting payment',
   confirming: 'Confirming payment',
   completed: 'Payment complete',
@@ -98,51 +96,30 @@ export default function CheckoutClient({ reference }: CheckoutClientProps) {
     session.status === 'underpaid' ||
     session.status === 'expired';
 
-  // Bank transfer is the default rail, so the payer lands on instructions
-  // rather than on a method chooser.
-  const method = session.method ?? 'ngn_transfer';
-  const tab: MethodTab = isCryptoMethod(method) ? 'crypto' : 'bank';
-
-  const switchTab = (next: MethodTab) => {
-    if (next === tab) return;
-    selectMethod(session, next === 'bank' ? 'ngn_transfer' : 'usdt_tron');
-  };
-
-  const methodTabs = <MethodTabs value={tab} onChange={switchTab} />;
-
   return (
     <>
-      <CheckoutShell session={session} mobileTabs={settled ? undefined : methodTabs}>
+      <CheckoutShell session={session}>
         <h1 className="text-[1.75rem] sm:text-[2rem] leading-none font-semibold tracking-tight">
           {HEADINGS[session.status]}
         </h1>
 
-        {settled ? (
-          <div className="mt-6">
+        <div className="mt-7">
+          {settled ? (
             <ResultPanel session={session} onRestart={() => restartSession(session)} />
-          </div>
-        ) : (
-          <>
-            {/* Phones get this above the invoice instead — see CheckoutShell. */}
-            <div className="mt-5 hidden lg:block">{methodTabs}</div>
-
-            <div className="mt-7">
-              {tab === 'bank' ? (
-                <BankTransferPanel
-                  session={session}
-                  onRequestAccount={() => requestVirtualAccount(session)}
-                  onExpire={() => markExpired(session)}
-                />
-              ) : (
-                <CryptoPanel
-                  session={session}
-                  method={method as CryptoMethod}
-                  onSelectAsset={(next) => selectMethod(session, next)}
-                />
-              )}
-            </div>
-          </>
-        )}
+          ) : isCryptoAsset(session.asset_code) ? (
+            <CryptoPanel
+              session={session}
+              onRequestAddress={() => requestDepositAddress(session)}
+            />
+          ) : (
+            <BankTransferPanel
+              session={session}
+              onRequestAccount={() => requestVirtualAccount(session)}
+              onConfirmPaid={() => markCompleted(session)}
+              onExpire={() => markExpired(session)}
+            />
+          )}
+        </div>
       </CheckoutShell>
 
       {demoEnabled && <DemoControls session={session} />}

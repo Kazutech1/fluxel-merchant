@@ -68,7 +68,7 @@ export default function OverviewView({
             className="px-4 py-2.5 bg-indigo-600 dark:bg-[#fed700] hover:bg-indigo-700 dark:hover:bg-amber-300 text-white dark:text-slate-950 rounded-lg text-xs font-bold flex items-center gap-2 shadow-xs fast-transition cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Fiat Deposit Intent</span>
+            <span>Create Deposit Intent</span>
           </button>
           <button
             onClick={onRequestPayout}

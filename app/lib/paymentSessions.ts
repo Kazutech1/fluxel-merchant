@@ -7,15 +7,11 @@ import { AssetCode } from '../types/dashboard';
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
-export type CheckoutMethod = 'ngn_transfer' | 'usdt_tron' | 'eth' | 'btc';
-
 /**
  * Mirrors the deposit intent lifecycle in FLOW_PLAN.md Flow 3 (fiat) and
- * Flow 6 (crypto), with `awaiting_method` added for the payer-facing step
- * that has no server-side equivalent.
+ * Flow 6 (crypto).
  */
 export type CheckoutStatus =
-  | 'awaiting_method'
   | 'awaiting_payment'
   | 'confirming'
   | 'completed'
@@ -41,18 +37,18 @@ export interface PaymentSession {
   customer_id: string;
   customer_name: string;
 
-  /** Asset the merchant billed in. Always NGN today. */
+  /**
+   * The asset being collected. An intent is for exactly one rail — a naira
+   * intent collects naira, a USDT intent collects USDT. Nothing is converted.
+   */
   asset_code: AssetCode;
-  /** Billed amount, string minor units (kobo). */
+  /** Billed amount, string minor units of `asset_code`. */
   expected_amount: string;
   items: LineItem[];
 
   status: CheckoutStatus;
-  method?: CheckoutMethod;
 
-  /** Asset actually paid in — differs from asset_code when paying by crypto. */
-  paid_asset?: AssetCode;
-  /** Amount actually received, string minor units of `paid_asset`. */
+  /** Amount actually received, string minor units of `asset_code`. */
   received_amount?: string;
   /** Block depth reached, for crypto rails. */
   confirmations?: number;
@@ -68,9 +64,14 @@ export interface PaymentSession {
   account_number?: string;
   bank_name?: string;
   account_name?: string;
-  branch?: string;
   /** Set alongside the account above; there is nothing to expire before that. */
   expires_at?: string;
+
+  /** Deposit address dedicated to this intent (Flow 6), minted on demand. */
+  deposit_address?: string;
+
+  /** Where the payer is sent once the payment completes. */
+  return_url?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -78,111 +79,58 @@ export interface PaymentSession {
 /* ------------------------------------------------------------------ */
 
 export interface RailInfo {
-  method: CheckoutMethod;
-  asset: AssetCode;
   label: string;
   network: string;
-  hint: string;
   /** Block depth required before release — Doc 1 §8.3 / FLOW_PLAN.md Flow 6. */
   confirmationsRequired: number;
 }
 
-export const RAILS: Record<CheckoutMethod, RailInfo> = {
-  ngn_transfer: {
-    method: 'ngn_transfer',
-    asset: 'NGN',
-    label: 'Bank transfer',
-    network: 'Lenco MFB',
-    hint: 'Transfer from any Nigerian bank app',
-    confirmationsRequired: 0,
-  },
-  usdt_tron: {
-    method: 'usdt_tron',
-    asset: 'USDT',
-    label: 'USDT',
-    network: 'TRON (TRC-20)',
-    hint: 'Lowest network fee',
-    confirmationsRequired: 19,
-  },
-  eth: {
-    method: 'eth',
-    asset: 'ETH',
-    label: 'Ethereum',
-    network: 'ERC-20',
-    hint: '12 block confirmations',
-    confirmationsRequired: 12,
-  },
-  btc: {
-    method: 'btc',
-    asset: 'BTC',
-    label: 'Bitcoin',
-    network: 'Bitcoin',
-    hint: 'Slowest to confirm',
-    confirmationsRequired: 6,
-  },
+export const RAILS: Record<AssetCode, RailInfo> = {
+  NGN: { label: 'Bank transfer', network: 'Lenco MFB', confirmationsRequired: 0 },
+  USDT: { label: 'USDT', network: 'TRON (TRC-20)', confirmationsRequired: 19 },
+  ETH: { label: 'Ethereum', network: 'ERC-20', confirmationsRequired: 12 },
+  BTC: { label: 'Bitcoin', network: 'Bitcoin', confirmationsRequired: 6 },
 };
 
-export const RAIL_ORDER: CheckoutMethod[] = ['ngn_transfer', 'usdt_tron', 'eth', 'btc'];
+export const CRYPTO_ASSETS: AssetCode[] = ['USDT', 'ETH', 'BTC'];
+export const ALL_ASSETS: AssetCode[] = ['NGN', 'USDT', 'ETH', 'BTC'];
 
-export type CryptoMethod = Exclude<CheckoutMethod, 'ngn_transfer'>;
-
-/** Grouped behind a single "Crypto" tab, with an asset picker inside. */
-export const CRYPTO_METHODS: CryptoMethod[] = ['usdt_tron', 'eth', 'btc'];
-
-export function isCryptoMethod(method: CheckoutMethod): method is CryptoMethod {
-  return method !== 'ngn_transfer';
+export function isCryptoAsset(asset: AssetCode): boolean {
+  return asset !== 'NGN';
 }
 
-/** Demo FX: whole naira per 1 major unit of each asset. */
-const NGN_PER_UNIT: Record<AssetCode, number> = {
-  NGN: 1,
-  USDT: 1_650,
-  ETH: 5_600_000,
-  BTC: 160_000_000,
-};
+/* ------------------------------------------------------------------ */
+/* Money                                                               */
+/* ------------------------------------------------------------------ */
 
 const DECIMALS: Record<AssetCode, number> = { NGN: 2, USDT: 6, ETH: 18, BTC: 8 };
-
-/**
- * How many decimals a payer is actually asked to send. Quotes are truncated to
- * this precision so the amount we display, the amount the copy button yields,
- * and the amount we expect are byte-identical — a payer who sends exactly what
- * the screen says must never land in `underpaid`.
- */
-const QUOTE_DECIMALS: Record<AssetCode, number> = { NGN: 2, USDT: 6, ETH: 6, BTC: 8 };
 
 function pow10(n: number): bigint {
   return BigInt(10) ** BigInt(n);
 }
 
-/** Zeroes out any precision below what we quote. */
-function quantize(minorUnits: string, asset: AssetCode): string {
-  const excess = DECIMALS[asset] - QUOTE_DECIMALS[asset];
-  if (excess <= 0) return minorUnits;
-  const factor = pow10(excess);
-  return ((BigInt(minorUnits) / factor) * factor).toString();
-}
-
 /**
- * Converts a kobo amount into the minor units of `asset`, in BigInt throughout
- * so we never touch a float — the §2.1 money contract in FRONTEND_DELIVERABLES.md.
+ * Parses a human-typed decimal ("0.0031", "50000") into string minor units,
+ * digit by digit so we never touch a float — the §2.1 money contract in
+ * FRONTEND_DELIVERABLES.md. Extra precision is truncated, not rounded.
  */
-export function convertFromNgn(koboAmount: string, asset: AssetCode): string {
-  if (asset === 'NGN') return koboAmount;
+export function toMinorUnits(input: string, asset: AssetCode): string {
+  const [whole = '', fraction = ''] = input.trim().split('.');
+  const decimals = DECIMALS[asset];
+  const paddedFraction = (fraction.replace(/\D/g, '') + '0'.repeat(decimals)).slice(0, decimals);
+  const digits = (whole.replace(/\D/g, '') || '0') + paddedFraction;
+
   try {
-    const kobo = BigInt(koboAmount);
-    const scaled = kobo * pow10(DECIMALS[asset]);
-    const divisor = BigInt(100) * BigInt(NGN_PER_UNIT[asset]);
-    return quantize((scaled / divisor).toString(), asset);
+    return BigInt(digits).toString();
   } catch {
     return '0';
   }
 }
 
 /**
- * Renders the full quoted amount, unlike formatMinorUnits which truncates to
- * 2–4 decimals for dashboard tables. Telling someone to send "0.0003 BTC" when
- * the quote is 0.0003125 shorts the merchant by 4%.
+ * Renders the full amount, unlike formatMinorUnits which truncates to 2–4
+ * decimals for dashboard tables. Telling someone to send "0.0003 BTC" when the
+ * amount is 0.0003125 shorts the merchant by 4%.
  */
 export function formatQuote(minorUnits: string, asset: AssetCode): string {
   try {
@@ -202,12 +150,44 @@ export function formatQuote(minorUnits: string, asset: AssetCode): string {
   }
 }
 
-/** Deposit addresses shown per crypto rail. Static demo wallets. */
-export const DEPOSIT_ADDRESSES: Record<Exclude<CheckoutMethod, 'ngn_transfer'>, string> = {
-  usdt_tron: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
-  eth: '0x8Ba1f109551bD432803012645Ac136ddd64DBA72',
-  btc: 'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq',
-};
+/* ------------------------------------------------------------------ */
+/* Rail provisioning                                                   */
+/* ------------------------------------------------------------------ */
+
+const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const BECH32 = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const HEX = '0123456789abcdef';
+
+/** 30-minute validity per ADR-021. */
+export const INTENT_VALIDITY_MS = 30 * 60 * 1000;
+
+/**
+ * Mints a deposit address dedicated to one intent (Flow 6), so inbound funds
+ * are attributable without the payer adding a memo. Crypto addresses don't
+ * expire, so unlike the virtual account there's no clock.
+ */
+export function issueDepositAddress(asset: AssetCode): string {
+  switch (asset) {
+    case 'USDT':
+      return `T${randomId(33, BASE58)}`;
+    case 'ETH':
+      return `0x${randomId(40, HEX)}`;
+    case 'BTC':
+      return `bc1q${randomId(38, BECH32)}`;
+    default:
+      return '';
+  }
+}
+
+/** Issues the dynamic virtual account and starts its 30-minute window. */
+export function issueVirtualAccount(session: PaymentSession): Partial<PaymentSession> {
+  return {
+    account_number: `8091${randomId(6, '0123456789')}`,
+    bank_name: 'Lenco MFB',
+    account_name: `FLUXEL / ${session.customer_name.toUpperCase()}`,
+    expires_at: new Date(Date.now() + INTENT_VALIDITY_MS).toISOString(),
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /* Store — localStorage backed, synced across tabs                     */
@@ -219,6 +199,49 @@ const CHANGE_EVENT = 'fluxel:sessions-changed';
 type SessionMap = Record<string, PaymentSession>;
 
 const EMPTY: SessionMap = {};
+
+const VALID_STATUSES: string[] = [
+  'awaiting_payment',
+  'confirming',
+  'completed',
+  'underpaid',
+  'expired',
+];
+
+/**
+ * Sessions outlive the code that wrote them: localStorage survives every
+ * deploy and every schema change, so a record written by an older build can
+ * still be sitting there missing fields the current one requires. Validate at
+ * this boundary and drop what no longer fits, rather than letting a malformed
+ * record reach a consumer and crash it.
+ */
+function isValidSession(value: unknown): value is PaymentSession {
+  if (!value || typeof value !== 'object') return false;
+  const session = value as Partial<PaymentSession>;
+
+  return (
+    typeof session.reference === 'string' &&
+    typeof session.expected_amount === 'string' &&
+    typeof session.asset_code === 'string' &&
+    (ALL_ASSETS as string[]).includes(session.asset_code) &&
+    typeof session.status === 'string' &&
+    VALID_STATUSES.includes(session.status) &&
+    Array.isArray(session.items)
+  );
+}
+
+function parseSessions(raw: string): SessionMap {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const clean: SessionMap = {};
+    for (const [reference, value] of Object.entries(parsed)) {
+      if (isValidSession(value)) clean[reference] = value;
+    }
+    return clean;
+  } catch {
+    return EMPTY;
+  }
+}
 
 /**
  * useSyncExternalStore demands a referentially stable snapshot — re-parsing on
@@ -236,11 +259,7 @@ function getSnapshot(): SessionMap {
   const raw = readRaw();
   if (raw !== cachedRaw) {
     cachedRaw = raw;
-    try {
-      cachedMap = JSON.parse(raw) as SessionMap;
-    } catch {
-      cachedMap = EMPTY;
-    }
+    cachedMap = parseSessions(raw);
   }
   return cachedMap;
 }
@@ -317,7 +336,9 @@ export interface CreateSessionInput {
   merchantName: string;
   customerId: string;
   customerName: string;
-  /** Billed amount in kobo, string minor units. */
+  /** The single asset this intent collects. */
+  asset: AssetCode;
+  /** Billed amount in `asset` minor units. */
   expectedAmount: string;
   orderRef?: string;
   /** Pins the reference, so a deep link can be seeded at the URL already open. */
@@ -325,12 +346,9 @@ export interface CreateSessionInput {
   /** Invoice lines. Falls back to a single line for the full amount. */
   items?: LineItem[];
   description?: string;
+  /** Where to send the payer after a successful payment. */
+  returnUrl?: string;
 }
-
-/** 30-minute validity per ADR-021. */
-export const INTENT_VALIDITY_MS = 30 * 60 * 1000;
-
-const BRANCHES = ['Victoria Island, Lagos', 'Ikeja GRA, Lagos', 'Wuse II, Abuja'];
 
 export function createSession(input: CreateSessionInput): PaymentSession {
   const now = Date.now();
@@ -340,7 +358,12 @@ export function createSession(input: CreateSessionInput): PaymentSession {
   const items: LineItem[] =
     input.items && input.items.length > 0
       ? input.items
-      : [{ description: input.description?.trim() || `Order ${orderRef}`, amount: input.expectedAmount }];
+      : [
+          {
+            description: input.description?.trim() || `Order ${orderRef}`,
+            amount: input.expectedAmount,
+          },
+        ];
 
   return {
     reference,
@@ -350,28 +373,12 @@ export function createSession(input: CreateSessionInput): PaymentSession {
     order_ref: orderRef,
     customer_id: input.customerId,
     customer_name: input.customerName,
-    asset_code: 'NGN',
+    asset_code: input.asset,
     expected_amount: input.expectedAmount,
     items,
-    // Bank transfer is the default rail, so the payer lands on instructions
-    // rather than on an extra chooser step.
-    method: 'ngn_transfer',
     status: 'awaiting_payment',
     created_at: new Date(now).toISOString(),
-  };
-}
-
-/**
- * Issues the dynamic virtual account and starts its 30-minute validity window.
- * Called when the payer asks for account details, never on link creation.
- */
-export function issueVirtualAccount(session: PaymentSession): Partial<PaymentSession> {
-  return {
-    account_number: `8091${randomId(6, '0123456789')}`,
-    bank_name: 'Lenco MFB',
-    account_name: `FLUXEL / ${session.customer_name.toUpperCase()}`,
-    branch: BRANCHES[Math.floor(Math.random() * BRANCHES.length)],
-    expires_at: new Date(Date.now() + INTENT_VALIDITY_MS).toISOString(),
+    return_url: input.returnUrl,
   };
 }
 
@@ -384,6 +391,7 @@ export function createDemoSession(reference?: string): PaymentSession {
     merchantName: 'Acme Fintech Solutions',
     customerId: 'cus_312A9F',
     customerName: 'Amina Bello',
+    asset: 'NGN',
     expectedAmount: '5000000',
     reference,
     items: [
@@ -405,12 +413,4 @@ export function useSessions(): SessionMap {
 
 export function usePaymentSession(reference: string): PaymentSession | undefined {
   return useSessions()[reference];
-}
-
-/** Sessions that reached a terminal money-moved state, newest first. */
-export function useSettledSessions(): PaymentSession[] {
-  const map = useSessions();
-  return Object.values(map)
-    .filter((s) => s.status === 'completed' || s.status === 'underpaid')
-    .sort((a, b) => (b.completed_at ?? b.created_at).localeCompare(a.completed_at ?? a.created_at));
 }

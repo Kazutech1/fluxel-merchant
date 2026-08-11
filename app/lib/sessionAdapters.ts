@@ -8,7 +8,6 @@ import { PaymentSession, RAILS } from './paymentSessions';
  */
 
 const INTENT_STATUS: Record<PaymentSession['status'], DepositIntent['status']> = {
-  awaiting_method: 'pending',
   awaiting_payment: 'pending',
   confirming: 'pending',
   completed: 'completed',
@@ -30,18 +29,19 @@ export function sessionToIntent(session: PaymentSession): DepositIntent {
     status: INTENT_STATUS[session.status],
     created_at: session.created_at,
     expires_at: session.expires_at ?? session.created_at,
-    account_number: session.account_number ?? NOT_ISSUED,
-    bank_name: session.bank_name ?? NOT_ISSUED,
-    account_name: session.account_name ?? NOT_ISSUED,
+    // Crypto intents have an address where a fiat intent has an account.
+    account_number: session.account_number ?? session.deposit_address ?? NOT_ISSUED,
+    bank_name: session.bank_name ?? RAILS[session.asset_code].network,
+    account_name: session.account_name ?? `${session.asset_code} deposit address`,
     qr_payload: session.account_number
       ? `NGN:${session.account_number}:${session.bank_name}:${session.expected_amount}`
-      : '',
+      : (session.deposit_address ?? ''),
   };
 }
 
 /** Flow 3: Dr settlement float / Cr customer liability. */
 function legsFor(session: PaymentSession, amount: string): DoubleEntryLeg[] {
-  const asset = session.paid_asset ?? session.asset_code;
+  const asset = session.asset_code;
   const fiat = asset === 'NGN';
 
   return [
@@ -66,9 +66,9 @@ function legsFor(session: PaymentSession, amount: string): DoubleEntryLeg[] {
 export function sessionToTransaction(session: PaymentSession): Transaction | null {
   if (session.status !== 'completed' && session.status !== 'underpaid') return null;
 
-  const asset = session.paid_asset ?? session.asset_code;
+  const asset = session.asset_code;
   const amount = session.received_amount ?? session.expected_amount;
-  const rail = session.method ? RAILS[session.method] : undefined;
+  const rail = RAILS[asset];
 
   return {
     id: `txn_${session.reference.replace(/^fdi_/, '')}`,
@@ -79,12 +79,15 @@ export function sessionToTransaction(session: PaymentSession): Transaction | nul
     correlation_id: session.correlation_id,
     external_ref: session.order_ref,
     customer_id: session.customer_id,
-    customer_name: `${session.customer_name} · Checkout${rail ? ` (${rail.label})` : ''}`,
+    customer_name: `${session.customer_name} · Checkout (${rail.label})`,
     created_at: session.completed_at ?? session.created_at,
     double_entry_legs: legsFor(session, amount),
     block_confirmations:
-      rail && rail.confirmationsRequired > 0
-        ? { current: session.confirmations ?? rail.confirmationsRequired, required: rail.confirmationsRequired }
+      rail.confirmationsRequired > 0
+        ? {
+            current: session.confirmations ?? rail.confirmationsRequired,
+            required: rail.confirmationsRequired,
+          }
         : undefined,
   };
 }

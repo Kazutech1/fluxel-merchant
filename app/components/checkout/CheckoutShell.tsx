@@ -7,12 +7,6 @@ import InvoiceSummary from './InvoiceSummary';
 
 interface CheckoutShellProps {
   session: PaymentSession;
-  /**
-   * The rail switcher, hoisted above the invoice on phones so it's the first
-   * thing in reach. Desktop renders its own copy inside the payment column,
-   * where it sits under the heading.
-   */
-  mobileTabs?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -20,7 +14,7 @@ interface CheckoutShellProps {
  * Invoice on the left, payment action on the right, split by a hairline on
  * desktop and stacked on a phone.
  */
-export default function CheckoutShell({ session, mobileTabs, children }: CheckoutShellProps) {
+export default function CheckoutShell({ session, children }: CheckoutShellProps) {
   return (
     <div className="min-h-svh bg-white dark:bg-[#0d0d0d] text-slate-900 dark:text-slate-100 flex flex-col">
       <header className="shrink-0 border-b border-slate-200 dark:border-[#1e1e22]">
@@ -41,8 +35,6 @@ export default function CheckoutShell({ session, mobileTabs, children }: Checkou
           </a>
         </div>
       </header>
-
-      {mobileTabs && <div className="lg:hidden px-5 sm:px-8 pt-5">{mobileTabs}</div>}
 
       <div className="flex-1 lg:grid lg:grid-cols-2">
         <section

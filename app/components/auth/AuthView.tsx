@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Eye, EyeOff, Moon, Sun } from 'lucide-react';
+import OtpInput from '../common/OtpInput';
 
 interface AuthViewProps {
   onLoginSuccess: (userRole: string, tokenType: 'dash' | 'admin') => void;
@@ -63,11 +64,11 @@ export default function AuthView({ onLoginSuccess, theme = 'dark', onToggleTheme
     onLoginSuccess('Owner', 'dash');
   };
 
+  // OtpInput sanitises to digits and fires onComplete on the last box, so this
+  // only has to store the value and clear any stale error.
   const handleTotpChange = (value: string) => {
-    const digits = value.replace(/\D/g, '').slice(0, 6);
-    setTotpCode(digits);
+    setTotpCode(value);
     if (error) setError('');
-    if (digits.length === 6) submitTotp(digits);
   };
 
   const handleQuickLogin = (role: string, demoEmail: string) => {
@@ -331,24 +332,14 @@ export default function AuthView({ onLoginSuccess, theme = 'dark', onToggleTheme
                   }}
                   className="space-y-5"
                 >
-                  <div>
-                    <label htmlFor="totp" className="sr-only">
-                      6-digit authentication code
-                    </label>
-                    <input
-                      id="totp"
-                      name="one-time-code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      value={totpCode}
-                      onChange={(e) => handleTotpChange(e.target.value)}
-                      placeholder="000000"
-                      autoFocus
-                      className="w-full h-16 rounded-lg bg-white dark:bg-[#141416] border border-slate-300 dark:border-[#2a2a30] text-center font-mono text-2xl tracking-[0.5em] indent-[0.5em] text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 outline-none focus:border-slate-900 dark:focus:border-[#fed700] focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-[#fed700]/20 transition-colors"
-                    />
-                  </div>
+                  <OtpInput
+                    label="6-digit authentication code"
+                    value={totpCode}
+                    onChange={handleTotpChange}
+                    onComplete={submitTotp}
+                    invalid={Boolean(error)}
+                    autoFocus
+                  />
 
                   {error && (
                     <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">

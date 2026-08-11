@@ -19,11 +19,15 @@ import QrCodeModal from './components/common/QrCodeModal';
 import PaymentLinkModal from './components/common/PaymentLinkModal';
 
 import {
+  ALL_ASSETS,
   PaymentSession,
+  RAILS,
   createSession,
+  toMinorUnits,
   upsertSession,
   useSessions,
 } from './lib/paymentSessions';
+import AssetIcon from './components/common/AssetIcon';
 import {
   sessionToIntent,
   sessionToTransaction,
@@ -95,6 +99,8 @@ export default function App() {
   const [intentCustomer, setIntentCustomer] = useState(customers[0]?.id || '');
   const [intentAmount, setIntentAmount] = useState('50000');
   const [intentDescription, setIntentDescription] = useState('Marketplace order settlement');
+  // An intent collects exactly one asset — naira for naira, crypto for crypto.
+  const [intentAsset, setIntentAsset] = useState<AssetCode>('NGN');
 
   // Created Intent QR Modal State
   const [intentQrData, setIntentQrData] = useState<{ title: string; subtitle: string; payload: string } | null>(null);
@@ -158,15 +164,20 @@ export default function App() {
   };
 
   // 1. Create Deposit Intent — issues a hosted checkout link the customer can pay on.
-  const createPaymentRequest = (customerId: string, amountNaira: string, description?: string) => {
+  const createPaymentRequest = (
+    customerId: string,
+    amount: string,
+    asset: AssetCode,
+    description?: string
+  ) => {
     const cust = customers.find((c) => c.id === customerId) || customers[0];
-    const kobo = Math.round(parseFloat(amountNaira || '0') * 100).toString();
 
     const session = createSession({
       merchantName: settings.business_name,
       customerId: cust.id,
       customerName: cust.name,
-      expectedAmount: kobo,
+      asset,
+      expectedAmount: toMinorUnits(amount, asset),
       description,
     });
 
@@ -178,7 +189,7 @@ export default function App() {
 
   const handleCreateIntentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createPaymentRequest(intentCustomer, intentAmount, intentDescription);
+    createPaymentRequest(intentCustomer, intentAmount, intentAsset, intentDescription);
   };
 
   // 2. Manual Customer Balance Adjustment
@@ -401,7 +412,7 @@ export default function App() {
                 showToast(`Customer ${name} provisioned`);
               }}
               onManualBalanceAdjustment={handleManualBalanceAdjustment}
-              onIssueDepositIntent={(id, amt) => createPaymentRequest(id, amt)}
+              onIssueDepositIntent={(id, amt) => createPaymentRequest(id, amt, 'NGN')}
             />
           )}
 
@@ -506,12 +517,46 @@ export default function App() {
                 <Building2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create Dynamic NGN Deposit Intent</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">ADR-021 · 30-Minute Valid Virtual Account</p>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create Deposit Intent</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  {intentAsset === 'NGN'
+                    ? 'ADR-021 · 30-minute dynamic virtual account'
+                    : `Flow 6 · dedicated ${intentAsset} address on ${RAILS[intentAsset].network}`}
+                </p>
               </div>
             </div>
 
             <form onSubmit={handleCreateIntentSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  What is the customer depositing?
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {ALL_ASSETS.map((asset) => {
+                    const active = asset === intentAsset;
+                    return (
+                      <button
+                        key={asset}
+                        type="button"
+                        onClick={() => setIntentAsset(asset)}
+                        aria-pressed={active}
+                        className={`min-h-11 px-1.5 rounded-lg border text-xs font-bold inline-flex items-center justify-center gap-1.5 fast-transition cursor-pointer ${
+                          active
+                            ? 'border-indigo-500 dark:border-[#fed700] bg-indigo-50 dark:bg-amber-500/10 text-indigo-700 dark:text-[#fed700]'
+                            : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        <AssetIcon code={asset} className="w-4 h-4" />
+                        {asset}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  One asset per intent — the checkout collects only this rail.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
                   Select Target Customer
@@ -547,16 +592,24 @@ export default function App() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Expected Deposit Amount (NGN)
+                  Expected Deposit Amount ({intentAsset})
                 </label>
-                <input
-                  type="number"
-                  required
-                  value={intentAmount}
-                  onChange={(e) => setIntentAmount(e.target.value)}
-                  placeholder="50000"
-                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 rounded-lg text-sm text-slate-900 dark:text-white font-bold outline-none"
-                />
+                <div className="relative">
+                  <input
+                    // Decimal, not number: crypto amounts carry up to 18 places
+                    // and are parsed digit-by-digit rather than through a float.
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    value={intentAmount}
+                    onChange={(e) => setIntentAmount(e.target.value.replace(/[^\d.]/g, ''))}
+                    placeholder={intentAsset === 'NGN' ? '50000' : '0.05'}
+                    className="w-full pl-3 pr-16 py-2.5 bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 rounded-lg text-sm text-slate-900 dark:text-white font-bold outline-none"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 dark:text-slate-500">
+                    {intentAsset}
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">

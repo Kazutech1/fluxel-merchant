@@ -5,11 +5,6 @@ import { CheckCircle2, Clock3, FileClock, Loader, TriangleAlert } from 'lucide-r
 import { CheckoutStatus } from '../../lib/paymentSessions';
 
 const STYLES: Record<CheckoutStatus, { label: string; className: string; Icon: typeof Clock3 }> = {
-  awaiting_method: {
-    label: 'Unpaid',
-    className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
-    Icon: FileClock,
-  },
   awaiting_payment: {
     label: 'Unpaid',
     className: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
