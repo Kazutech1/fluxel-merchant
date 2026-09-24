@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import AuthView from './components/auth/AuthView';
 import Sidebar, { TabType } from './components/common/Sidebar';
 import Header from './components/common/Header';
@@ -13,7 +13,6 @@ import DevelopersView from './components/dashboard/DevelopersView';
 import TeamView from './components/dashboard/TeamView';
 import SettingsView from './components/dashboard/SettingsView';
 import StepUpTotpModal from './components/common/StepUpTotpModal';
-import RevealKeyModal from './components/common/RevealKeyModal';
 import TestFireWebhookModal from './components/common/TestFireWebhookModal';
 import QrCodeModal from './components/common/QrCodeModal';
 import PaymentLinkModal from './components/common/PaymentLinkModal';
@@ -34,13 +33,14 @@ import {
   sortByCreatedDesc,
 } from './lib/sessionAdapters';
 import { toggleTheme, useTheme } from './lib/theme';
+import { fetchSession, logout as endSession } from './lib/auth';
+import type { AuthSession } from './types/auth';
 
 import {
   initialBalances,
   initialCustomers,
   initialDepositIntents,
   initialTransactions,
-  initialApiKeys,
   initialWebhookEndpoints,
   initialWebhookDeliveries,
   initialTeamMembers,
@@ -54,7 +54,6 @@ import {
   Customer,
   DepositIntent,
   Transaction,
-  ApiKey,
   WebhookEndpoint,
   WebhookDelivery,
   TeamMember,
@@ -62,7 +61,7 @@ import {
   BusinessSettings,
 } from './types/dashboard';
 
-import { CheckCircle2, X, QrCode, Building2 } from 'lucide-react';
+import { CheckCircle2, X, QrCode, Building2, Loader2 } from 'lucide-react';
 
 export default function App() {
   // Theme lives in an external store (see lib/theme.ts) so the /pay route —
@@ -71,10 +70,12 @@ export default function App() {
   const theme = useTheme();
   const toggleThemeHandler = () => toggleTheme(theme);
 
-  // Auth State
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState('Owner');
-  const [tokenType, setTokenType] = useState<'dash' | 'admin'>('dash');
+  // Auth state. The tokens themselves are never here — they live in httpOnly
+  // cookies the route handlers in app/api/auth/ own; this is only what the
+  // dashboard renders. `authStatus` starts 'restoring' so a cold load with a
+  // valid cookie doesn't flash the sign-in page before the session comes back.
+  const [authStatus, setAuthStatus] = useState<'restoring' | 'signed-out' | 'signed-in'>('restoring');
+  const [session, setSession] = useState<AuthSession | null>(null);
 
   // Navigation & Env
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -86,7 +87,6 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [intents, setIntents] = useState<DepositIntent[]>(initialDepositIntents);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>(initialApiKeys);
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>(initialWebhookEndpoints);
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>(initialWebhookDeliveries);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(initialTeamMembers);
@@ -127,9 +127,6 @@ export default function App() {
   const [stepUpTitle, setStepUpTitle] = useState('');
   const [stepUpDescription, setStepUpDescription] = useState('');
 
-  // Reveal Secret Key Modal
-  const [revealKeyData, setRevealKeyData] = useState<{ name: string; key: string } | null>(null);
-
   // Test Fire Webhook Modal
   const [testWebhookTarget, setTestWebhookTarget] = useState<WebhookEndpoint | null>(null);
 
@@ -138,16 +135,59 @@ export default function App() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleLoginSuccess = (role: string, type: 'dash' | 'admin') => {
-    setUserRole(role);
-    setTokenType(type);
-    setIsAuthenticated(true);
-    showToast(`Logged in successfully (${type === 'dash' ? 'Merchant Portal' : 'Staff Console'} - JWT typ: "${type}")`);
-  };
+  /**
+   * Adopts a session, whether it came from a sign-in or from restoring cookies
+   * on load. The business record is the API's, so the console stops showing the
+   * mock merchant the moment a real one is signed in.
+   *
+   * Live is gated on `tier_1`, which only an admin KYB approval sets: a sandbox
+   * business landing on the Live tab would see an environment it cannot use.
+   */
+  const adoptSession = useCallback((next: AuthSession) => {
+    setSession(next);
+    setAuthStatus('signed-in');
+    setEnvironment(next.business.tier_1 ? 'live' : 'sandbox');
+    setSettings((current) => ({
+      ...current,
+      business_name: next.business.name,
+      merchant_id: next.business.id,
+      settlement_preference: next.business.settlement_preference,
+    }));
+  }, []);
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    showToast('Session logged out successfully');
+  // Cold-load session restore. The route handler rotates the refresh token
+  // server-side if the 15-minute access token has lapsed, so this is the only
+  // place the client has to think about token lifetime at all.
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchSession()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.authenticated) {
+          adoptSession({ user: result.user, business: result.business });
+        } else {
+          setAuthStatus('signed-out');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAuthStatus('signed-out');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [adoptSession]);
+
+  const handleLogout = async () => {
+    // Sign out locally whatever the API says — a revoke that fails must still
+    // leave the browser signed out.
+    try {
+      await endSession();
+    } finally {
+      setSession(null);
+      setAuthStatus('signed-out');
+    }
   };
 
   const triggerStepUp = (title: string, description: string, action: () => void) => {
@@ -190,43 +230,6 @@ export default function App() {
   const handleCreateIntentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createPaymentRequest(intentCustomer, intentAmount, intentAsset, intentDescription);
-  };
-
-  // 2. Manual Customer Balance Adjustment
-  const handleManualBalanceAdjustment = (customerId: string, asset: AssetCode, amount: string, reason: string) => {
-    const cust = customers.find((c) => c.id === customerId);
-    if (!cust) return;
-
-    setCustomers(
-      customers.map((c) => {
-        if (c.id === customerId) {
-          const current = BigInt(c.balances[asset] || '0');
-          const adj = BigInt(amount);
-          const updated = (current + adj).toString();
-          return {
-            ...c,
-            balances: { ...c.balances, [asset]: updated },
-          };
-        }
-        return c;
-      })
-    );
-
-    const newTxnId = `txn_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-    const newTxn: Transaction = {
-      id: newTxnId,
-      kind: 'deposit',
-      asset_code: asset,
-      amount: amount,
-      status: 'completed',
-      correlation_id: `fx_cor_${Math.random().toString(36).substring(2, 16)}`,
-      customer_id: cust.id,
-      customer_name: `${cust.name} (Manual Ledger Adjustment)`,
-      created_at: new Date().toISOString(),
-    };
-
-    setTransactions([newTxn, ...transactions]);
-    showToast(`Manual Ledger Adjustment posted for ${cust.name}. Audit note: "${reason}"`);
   };
 
   // 3. Initiate Payout
@@ -287,40 +290,22 @@ export default function App() {
     showToast(`Internal Transfer ${newTxnId} posted to double-entry ledger`);
   };
 
-  // 5. Create API Key
-  const handleCreateApiKey = (name: string, keyClass: 'pk' | 'sk') => {
-    triggerStepUp(
-      `Generate New ${keyClass.toUpperCase()} Bearer API Key`,
-      `Generating a new API key requires step-up TOTP verification per Doc 8 security specifications.`,
-      () => {
-        const prefix = keyClass === 'sk' ? (environment === 'live' ? 'sk_live_' : 'sk_test_') : (environment === 'live' ? 'pk_live_' : 'pk_test_');
-        const randomBody = Array.from({ length: 32 }, () => Math.floor(Math.random() * 36).toString(36)).join('');
-        const fullKey = `${prefix}${randomBody}`;
-        const last4 = fullKey.slice(-4);
-
-        const newKey: ApiKey = {
-          id: `key_${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          name,
-          class: keyClass,
-          env: environment,
-          prefix,
-          last4,
-          created_at: new Date().toISOString(),
-          last_used_at: new Date().toISOString(),
-          status: 'active',
-          ip_allowlist: [],
-        };
-
-        setApiKeys([newKey, ...apiKeys]);
-        setRevealKeyData({ name, key: fullKey });
-      }
+  if (authStatus === 'restoring') {
+    return (
+      <div className="min-h-svh flex items-center justify-center bg-white dark:bg-[#0d0d0d]">
+        <Loader2 className="w-6 h-6 animate-spin text-slate-400" aria-label="Restoring your session" />
+      </div>
     );
-  };
-
-  // Render Auth Page if not logged in
-  if (!isAuthenticated) {
-    return <AuthView onLoginSuccess={handleLoginSuccess} theme={theme} onToggleTheme={toggleThemeHandler} />;
   }
+
+  if (authStatus !== 'signed-in' || !session) {
+    return <AuthView onAuthenticated={adoptSession} />;
+  }
+
+  // Self-registration mints `['owner']`; the API has no richer role model yet.
+  const userRole = session.user.roles[0]
+    ? session.user.roles[0].charAt(0).toUpperCase() + session.user.roles[0].slice(1)
+    : 'Member';
 
   const tabTitles: Record<TabType, string> = {
     overview: 'Platform Overview',
@@ -362,6 +347,7 @@ export default function App() {
           businessSettings={settings}
           activeTabTitle={tabTitles[activeTab]}
           userRole={userRole}
+          userEmail={session.user.email}
           onLogout={handleLogout}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           theme={theme}
@@ -382,38 +368,7 @@ export default function App() {
           )}
 
           {activeTab === 'customers' && (
-            <CustomersView
-              customers={customers}
-              transactions={allTransactions}
-              intents={allIntents}
-              onToggleCustomerFreeze={(id, reason) => {
-                setCustomers(customers.map((c) => (c.id === id ? { ...c, status: c.status === 'active' ? 'frozen' : 'active' } : c)));
-                showToast(`Customer status updated. Reason: "${reason}"`);
-              }}
-              onCreateCustomer={(name, email, extId) => {
-                const newCus: Customer = {
-                  id: `cus_${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
-                  external_id: extId,
-                  name,
-                  email,
-                  status: 'active',
-                  kyc_tier: 'Tier 2 (Verified ID)',
-                  bvn_tax_id: '22880011223',
-                  risk_score: 10,
-                  transaction_count: 0,
-                  wallets: [
-                    { chain: 'EVM (ETH/BSC)', address: `0x${Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}` },
-                    { chain: 'TRON', address: `T${Array.from({ length: 33 }, () => Math.floor(Math.random() * 36).toString(36)).join('')}` },
-                  ],
-                  balances: { NGN: '0', USDT: '0', ETH: '0', BTC: '0' },
-                  created_at: new Date().toISOString(),
-                };
-                setCustomers([newCus, ...customers]);
-                showToast(`Customer ${name} provisioned`);
-              }}
-              onManualBalanceAdjustment={handleManualBalanceAdjustment}
-              onIssueDepositIntent={(id, amt) => createPaymentRequest(id, amt, 'NGN')}
-            />
+            <CustomersView />
           )}
 
           {activeTab === 'transactions' && (
@@ -438,12 +393,9 @@ export default function App() {
 
           {activeTab === 'developers' && (
             <DevelopersView
-              environment={environment}
-              apiKeys={apiKeys}
+              business={session.business}
               webhooks={webhooks}
               deliveries={deliveries}
-              onCreateApiKey={handleCreateApiKey}
-              onRevokeApiKey={(id) => setApiKeys(apiKeys.map((k) => (k.id === id ? { ...k, status: 'revoked' } : k)))}
               onRotateWebhookSecret={(id) => setWebhooks(webhooks.map((w) => (w.id === id ? { ...w, secret: `whsec_${Math.random().toString(36).substring(2, 32)}` } : w)))}
               onRequestTestFireWebhook={(wh) => setTestWebhookTarget(wh)}
             />
@@ -461,6 +413,14 @@ export default function App() {
           {activeTab === 'settings' && (
             <SettingsView
               settings={settings}
+              business={session.business}
+              onBusinessUpdated={(business) => {
+                // KYB submission flips status to `kyb_pending`, and an approval
+                // would flip `tier_1`; both gate what the rest of the console
+                // offers, so adopt the fresh record rather than re-fetching.
+                setSession((current) => (current ? { ...current, business } : current));
+                setSettings((s) => ({ ...s, settlement_preference: business.settlement_preference }));
+              }}
               onUpdateSettlementPreference={(pref) => setSettings({ ...settings, settlement_preference: pref })}
               onUpdateNotificationEmails={(nEmail, wEmail) => setSettings({ ...settings, notification_email: nEmail, webhook_email: wEmail })}
             />
@@ -475,13 +435,6 @@ export default function App() {
         description={stepUpDescription}
         onClose={() => setPendingStepUpAction(null)}
         onConfirm={handleStepUpConfirm}
-      />
-
-      <RevealKeyModal
-        isOpen={Boolean(revealKeyData)}
-        keyName={revealKeyData?.name || ''}
-        plaintextKey={revealKeyData?.key || ''}
-        onClose={() => setRevealKeyData(null)}
       />
 
       <TestFireWebhookModal

@@ -2,16 +2,23 @@
 
 import React, { useState } from 'react';
 import { BusinessSettings } from '../../types/dashboard';
+import type { AuthBusiness } from '../../types/auth';
+import KybPanel from '../business/KybPanel';
 import { Settings, Building2, Sliders, Mail, CheckCircle2 } from 'lucide-react';
 
 interface SettingsViewProps {
   settings: BusinessSettings;
+  /** The real business record from `GET /v1/dashboard/business`. */
+  business: AuthBusiness;
+  onBusinessUpdated: (business: AuthBusiness) => void;
   onUpdateSettlementPreference: (pref: 'accumulate' | 'auto_transfer') => void;
   onUpdateNotificationEmails: (notificationEmail: string, webhookEmail: string) => void;
 }
 
 export default function SettingsView({
   settings,
+  business,
+  onBusinessUpdated,
   onUpdateSettlementPreference,
   onUpdateNotificationEmails,
 }: SettingsViewProps) {
@@ -42,6 +49,20 @@ export default function SettingsView({
           <span>Settings saved successfully!</span>
         </div>
       )}
+
+      {/* Card 0: KYB — the one card here backed by a real endpoint. */}
+      <div className="bg-white dark:bg-[#141416] border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs space-y-4 fast-transition">
+        <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+          <Building2 className="w-5 h-5 text-indigo-600 dark:text-[#fed700]" />
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">Business Verification (KYB)</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              {business.name} · {business.id}
+            </p>
+          </div>
+        </div>
+        <KybPanel business={business} onBusinessUpdated={onBusinessUpdated} />
+      </div>
 
       {/* Card 1: Settlement Preference (ADR-025) */}
       <div className="bg-white dark:bg-[#141416] border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs space-y-4 fast-transition">

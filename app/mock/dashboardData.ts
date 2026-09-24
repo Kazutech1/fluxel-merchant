@@ -2,7 +2,6 @@ import {
   Customer,
   DepositIntent,
   Transaction,
-  ApiKey,
   WebhookEndpoint,
   WebhookDelivery,
   TeamMember,
@@ -259,45 +258,6 @@ export const initialTransactions: Transaction[] = [
       { account_code: '1000-02', account_name: 'Ethereum Treasury Hot Wallet (Asset)', type: 'debit', amount: '1500000000000000000', asset_code: 'ETH' },
       { account_code: '2000-02', account_name: 'Customer ETH Balance (Liability)', type: 'credit', amount: '1500000000000000000', asset_code: 'ETH' },
     ],
-  },
-];
-
-export const initialApiKeys: ApiKey[] = [
-  {
-    id: 'key_01H9A1',
-    name: 'Main Storefront Secret Key',
-    class: 'sk',
-    env: 'live',
-    prefix: 'sk_live_',
-    last4: '8f9a',
-    created_at: '2026-07-25T12:00:00Z',
-    last_used_at: '2026-08-07T23:18:00Z',
-    status: 'active',
-    ip_allowlist: ['192.168.1.1/32', '10.0.0.0/24'],
-  },
-  {
-    id: 'key_02H9A2',
-    name: 'Mobile App Read-Only Key',
-    class: 'pk',
-    env: 'live',
-    prefix: 'pk_live_',
-    last4: '3b2c',
-    created_at: '2026-07-25T12:05:00Z',
-    last_used_at: '2026-08-07T23:20:00Z',
-    status: 'active',
-    ip_allowlist: [],
-  },
-  {
-    id: 'key_03H9A3',
-    name: 'Sandbox Integration Test Key',
-    class: 'sk',
-    env: 'sandbox',
-    prefix: 'sk_test_',
-    last4: '9901',
-    created_at: '2026-07-24T09:30:00Z',
-    last_used_at: '2026-08-07T16:45:00Z',
-    status: 'active',
-    ip_allowlist: [],
   },
 ];
 

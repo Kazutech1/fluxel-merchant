@@ -79,19 +79,6 @@ export interface Transaction {
   raw_payload?: Record<string, any>;
 }
 
-export interface ApiKey {
-  id: string;
-  name: string;
-  class: 'pk' | 'sk';
-  env: Environment;
-  prefix: string;
-  last4: string;
-  created_at: string;
-  last_used_at: string;
-  status: 'active' | 'revoked';
-  ip_allowlist: string[];
-}
-
 export interface WebhookEndpoint {
   id: string;
   url: string;

@@ -1,44 +1,31 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ApiKey, WebhookEndpoint, WebhookDelivery, Environment } from '../../types/dashboard';
-import { KeyRound, Webhook, Plus, RotateCw, Trash2, Send, CheckCircle2, AlertTriangle, ExternalLink, ShieldCheck, X } from 'lucide-react';
+import { WebhookEndpoint, WebhookDelivery } from '../../types/dashboard';
+import type { AuthBusiness } from '../../types/auth';
+import LiveKeysPanel from '../developers/LiveKeysPanel';
+import { KeyRound, Webhook, RotateCw, Send, ExternalLink, ShieldCheck } from 'lucide-react';
 
 interface DevelopersViewProps {
-  environment: Environment;
-  apiKeys: ApiKey[];
+  business: AuthBusiness;
   webhooks: WebhookEndpoint[];
   deliveries: WebhookDelivery[];
-  onCreateApiKey: (name: string, keyClass: 'pk' | 'sk') => void;
-  onRevokeApiKey: (keyId: string) => void;
   onRotateWebhookSecret: (endpointId: string) => void;
   onRequestTestFireWebhook: (endpoint: WebhookEndpoint) => void;
 }
 
 export default function DevelopersView({
-  environment,
-  apiKeys,
+  business,
   webhooks,
   deliveries,
-  onCreateApiKey,
-  onRevokeApiKey,
   onRotateWebhookSecret,
   onRequestTestFireWebhook,
 }: DevelopersViewProps) {
+  // The API Keys tab is real (POST /v1/dashboard/keys). Webhooks below are
+  // still demo data — the only webhook route that exists is POST
+  // /v1/webhook-endpoints, and it lives on the API-key surface, not here.
   const [subTab, setSubTab] = useState<'keys' | 'webhooks' >('keys');
-  const [showCreateKeyModal, setShowCreateKeyModal] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
-  const [newKeyClass, setNewKeyClass] = useState<'pk' | 'sk'>('sk');
 
-  const filteredKeys = apiKeys.filter((k) => k.env === environment);
-
-  const handleCreateKeySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newKeyName) return;
-    onCreateApiKey(newKeyName, newKeyClass);
-    setShowCreateKeyModal(false);
-    setNewKeyName('');
-  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
@@ -81,73 +68,8 @@ export default function DevelopersView({
         </button>
       </div>
 
-      {/* SubTab 1: API Keys */}
-      {subTab === 'keys' && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-[#141416] border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs fast-transition">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Active Bearer API Keys ({environment.toUpperCase()})</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                `pk_` publishable keys (GET read-only) · `sk_` secret keys (Full operations, stored as SHA-256 hashes)
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowCreateKeyModal(true)}
-              className="w-full sm:w-auto px-4 py-2.5 bg-indigo-600 dark:bg-[#fed700] hover:bg-indigo-700 dark:hover:bg-amber-300 text-white dark:text-slate-950 rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-xs fast-transition cursor-pointer shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Generate New API Key</span>
-            </button>
-          </div>
-
-          <div className="bg-white dark:bg-[#141416] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs overflow-x-auto fast-transition">
-            <table className="w-full text-left border-collapse min-w-[600px]">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-[#1c1c20] border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <th className="py-3 px-6">Key Name</th>
-                  <th className="py-3 px-6">Class</th>
-                  <th className="py-3 px-6">Token Preview</th>
-                  <th className="py-3 px-6">Status</th>
-                  <th className="py-3 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs text-slate-700 dark:text-slate-300 font-medium">
-                {filteredKeys.map((key) => (
-                  <tr key={key.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 fast-transition">
-                    <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">{key.name}</td>
-                    <td className="py-4 px-6">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        key.class === 'sk' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900' : 'bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-900'
-                      }`}>
-                        {key.class === 'sk' ? 'Secret (sk)' : 'Publishable (pk)'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 font-mono text-slate-900 dark:text-slate-200">{key.prefix}••••••••{key.last4}</td>
-                    <td className="py-4 px-6">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        key.status === 'active' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900'
-                      }`}>
-                        {key.status}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      {key.status === 'active' && (
-                        <button
-                          onClick={() => onRevokeApiKey(key.id)}
-                          className="px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900 rounded font-semibold text-xs fast-transition cursor-pointer"
-                        >
-                          Revoke
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* API Keys — real, backed by POST /v1/dashboard/keys */}
+      {subTab === 'keys' && <LiveKeysPanel business={business} />}
 
       {/* SubTab 2: Webhook Endpoints & Deliveries */}
       {subTab === 'webhooks' && (
@@ -238,61 +160,6 @@ export default function DevelopersView({
         </div>
       )}
 
-      {/* Create Key Modal */}
-      {showCreateKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="bg-white dark:bg-[#141416] rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-md p-6 relative">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Generate Bearer API Key</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Environment: {environment.toUpperCase()}</p>
-
-            <form onSubmit={handleCreateKeySubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Key Name / Description
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newKeyName}
-                  onChange={(e) => setNewKeyName(e.target.value)}
-                  placeholder="e.g. Mobile App Storefront Key"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-400 dark:focus:ring-[#fed700]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">
-                  Key Class
-                </label>
-                <select
-                  value={newKeyClass}
-                  onChange={(e) => setNewKeyClass(e.target.value as 'pk' | 'sk')}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-400 dark:focus:ring-[#fed700]"
-                >
-                  <option value="sk">Secret Key (`sk_${environment}_...`) - Full Operations</option>
-                  <option value="pk">Publishable Key (`pk_${environment}_...`) - Read-Only</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateKeyModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2.5 text-xs font-bold text-white dark:text-slate-950 bg-indigo-600 dark:bg-[#fed700] hover:bg-indigo-700 dark:hover:bg-amber-300 rounded-lg shadow-xs cursor-pointer"
-                >
-                  Generate Key & Step-Up TOTP
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

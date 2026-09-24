@@ -10,10 +10,24 @@ interface HeaderProps {
   businessSettings: BusinessSettings;
   activeTabTitle: string;
   userRole: string;
+  /** Signed-in account, from the dashboard JWT + the login email. */
+  userEmail: string;
   onLogout: () => void;
   onOpenMobileSidebar?: () => void;
   theme?: 'dark' | 'light';
   onToggleTheme?: () => void;
+}
+
+/**
+ * The API exposes no display name for a dashboard user — `dashboard_users`
+ * stores email, password hash, business and roles, nothing else — so the
+ * avatar is built from the email's local part.
+ */
+function initials(email: string): string {
+  const local = email.split('@')[0] ?? '';
+  const parts = local.split(/[._-]+/).filter(Boolean);
+  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : local.slice(0, 2);
+  return (letters || '?').toUpperCase();
 }
 
 export default function Header({
@@ -22,6 +36,7 @@ export default function Header({
   businessSettings,
   activeTabTitle,
   userRole,
+  userEmail,
   onLogout,
   onOpenMobileSidebar,
   theme = 'dark',
@@ -148,11 +163,13 @@ export default function Header({
           {/* User Profile & Logout */}
           <div className="flex items-center gap-1.5 sm:gap-3 pl-1.5 sm:pl-3 border-l border-slate-200 dark:border-slate-800">
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-900 dark:bg-[#fed700] text-white dark:text-slate-950 font-bold text-[11px] sm:text-xs flex items-center justify-center shadow-xs">
-              SJ
+              {initials(userEmail)}
             </div>
-            <div className="hidden lg:block">
-              <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">Sarah Jenkins</p>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{userRole} · {businessSettings.business_name}</p>
+            <div className="hidden lg:block max-w-[14rem]">
+              <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight truncate" title={userEmail}>
+                {userEmail}
+              </p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate">{userRole} · {businessSettings.business_name}</p>
             </div>
             <button
               onClick={onLogout}
