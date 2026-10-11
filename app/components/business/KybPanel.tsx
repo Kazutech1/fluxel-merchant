@@ -62,12 +62,11 @@ const LABELS: Record<keyof KybDetails, string> = {
 };
 
 const inputClass =
-  'w-full h-11 px-3 rounded-lg bg-slate-50 dark:bg-[#1c1c20] border border-slate-300 dark:border-slate-800 ' +
-  'text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 dark:focus:border-[#fed700] ' +
-  'disabled:opacity-60';
+  'w-full h-11 px-3.5 rounded-lg bg-surface border border-line-strong text-base sm:text-sm text-ink ' +
+  'outline-none focus:border-gold focus:ring-2 focus:ring-brand/30 disabled:opacity-60 transition-colors';
 
 const labelClass =
-  'block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5';
+  'block text-sm font-medium text-ink-2 mb-2';
 
 function Banner({
   tone,
@@ -81,16 +80,16 @@ function Banner({
   children: React.ReactNode;
 }) {
   const tones = {
-    ok: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-300',
-    wait: 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-900/50 text-indigo-900 dark:text-indigo-300',
-    warn: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-300',
+    ok: 'bg-surface border-line [&_.kyb-icon]:text-positive',
+    wait: 'bg-gold-soft border-brand/40 [&_.kyb-icon]:text-gold',
+    warn: 'bg-surface border-negative/30 [&_.kyb-icon]:text-negative',
   };
   return (
-    <div className={`flex items-start gap-3 p-4 rounded-xl border ${tones[tone]}`}>
-      <span className="shrink-0 mt-0.5">{icon}</span>
+    <div className={`flex items-start gap-4 p-5 rounded-xl border ${tones[tone]}`}>
+      <span className="kyb-icon shrink-0 mt-0.5">{icon}</span>
       <div>
-        <p className="text-xs font-bold">{title}</p>
-        <p className="mt-1 text-[11px] leading-relaxed opacity-90">{children}</p>
+        <p className="text-sm font-semibold text-ink">{title}</p>
+        <div className="mt-1 text-sm leading-relaxed text-ink-2">{children}</div>
       </div>
     </div>
   );
@@ -127,7 +126,7 @@ export default function KybPanel({ business, onBusinessUpdated }: KybPanelProps)
       // already been submitted.
       if (err instanceof BusinessRequestError && err.code === 'business_frozen') {
         setError(
-          'This business can no longer submit KYB — it has either already been submitted or is not in sandbox-active status.'
+          'Your details have already been submitted, so there’s nothing more to send. If something needs changing, email customersupport@fluxel.app.'
         );
         return;
       }
@@ -139,27 +138,30 @@ export default function KybPanel({ business, onBusinessUpdated }: KybPanelProps)
 
   if (business.tier_1) {
     return (
-      <Banner tone="ok" icon={<BadgeCheck className="w-5 h-5" />} title="KYB approved">
-        This business is Tier&nbsp;1 verified. Live-environment API keys are unlocked.
+      <Banner tone="ok" icon={<BadgeCheck className="w-5 h-5" />} title="Your business is verified">
+        Live payments and live API keys are unlocked. You’re ready to take real money.
       </Banner>
     );
   }
 
   if (business.status === 'kyb_pending') {
     return (
-      <Banner tone="wait" icon={<Clock className="w-5 h-5" />} title="KYB under review">
-        Your details are with the compliance team. Sandbox access continues while they review.
-        There is no endpoint to read back or amend a submission, so any correction has to go
-        through your Fluxel contact.
+      <Banner tone="wait" icon={<Clock className="w-5 h-5" />} title="We’re reviewing your business">
+        <p>
+          Thanks — your details are with our compliance team. You can keep using sandbox in the meantime, and live
+          payments unlock as soon as you’re approved.
+        </p>
+        <p className="mt-2">
+          Need to correct something you sent? Email <a href="mailto:customersupport@fluxel.app" className="font-medium text-ink underline underline-offset-4 decoration-brand hover:decoration-2">customersupport@fluxel.app</a> and we’ll update it for you.
+        </p>
       </Banner>
     );
   }
 
   if (business.status !== 'active') {
     return (
-      <Banner tone="warn" icon={<TriangleAlert className="w-5 h-5" />} title="KYB unavailable">
-        This business is <code className="font-mono">{business.status}</code>. Only a
-        sandbox-active business can submit KYB — contact your Fluxel representative.
+      <Banner tone="warn" icon={<TriangleAlert className="w-5 h-5" />} title="Verification isn’t available right now">
+        We can’t take verification details for this account at the moment. Email <a href="mailto:customersupport@fluxel.app" className="font-medium text-ink underline underline-offset-4 decoration-brand hover:decoration-2">customersupport@fluxel.app</a> and we’ll sort it out.
       </Banner>
     );
   }
@@ -171,7 +173,7 @@ export default function KybPanel({ business, onBusinessUpdated }: KybPanelProps)
       <label htmlFor={`kyb-${key}`} className={labelClass}>
         {LABELS[key]}
         {!REQUIRED.includes(key) && (
-          <span className="ml-1 normal-case tracking-normal font-normal text-slate-400">
+          <span className="ml-1 font-normal text-ink-3">
             optional
           </span>
         )}
@@ -190,13 +192,15 @@ export default function KybPanel({ business, onBusinessUpdated }: KybPanelProps)
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 dark:bg-[#1c1c20] border border-slate-200 dark:border-slate-800">
-        <ShieldCheck className="w-4 h-4 text-slate-500 dark:text-slate-400 shrink-0 mt-0.5" />
-        <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-          Submitting moves the business to <strong>KYB pending</strong>. It can only be done once —
-          there is no amend or withdraw endpoint, and the submitted details cannot be read back.
-          Sandbox access is unaffected while it is reviewed; approval is what unlocks live keys.
-        </p>
+      <div className="flex items-start gap-3 p-4 rounded-xl bg-gold-soft border border-brand/40">
+        <ShieldCheck className="w-5 h-5 text-gold shrink-0 mt-0.5" />
+        <div className="text-sm leading-relaxed">
+          <p className="font-semibold text-ink">Verify your business to accept live payments</p>
+          <p className="mt-1 text-ink-2">
+            Please check everything carefully before you submit — you can only send this once, and changes afterwards go
+            through our support team. Sandbox keeps working while we review.
+          </p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -240,16 +244,16 @@ export default function KybPanel({ business, onBusinessUpdated }: KybPanelProps)
         </div>
 
         {error && (
-          <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+          <p role="alert" className="text-sm text-negative">
             {error}
           </p>
         )}
 
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+        <div className="pt-4 border-t border-line flex justify-end">
           <button
             type="submit"
             disabled={submitting}
-            className="px-4 py-2.5 text-xs font-bold text-white dark:text-slate-950 bg-indigo-600 dark:bg-[#fed700] hover:bg-indigo-700 dark:hover:bg-amber-300 rounded-lg inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+            className="h-10 px-4 text-sm font-medium text-brand-ink bg-brand hover:bg-brand-strong rounded-lg inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
           >
             {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden />}
             {submitting ? 'Submitting…' : 'Submit KYB for review'}

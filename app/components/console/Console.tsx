@@ -2,14 +2,15 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  AlertCircle,
   AlertTriangle,
-  ArrowDownLeft,
   BarChart3,
   CheckCircle2,
   Code2,
   Home,
   Link2,
   List,
+  Lock,
   LogOut,
   Menu,
   Moon,
@@ -19,24 +20,22 @@ import {
   Sun,
   Users,
   X,
-  Zap,
 } from 'lucide-react';
 
 import { toggleTheme, useTheme } from '../../lib/theme';
-import { useConsoleData } from '../../lib/console/useConsoleData';
-import { SANDBOX_SEED } from '../../lib/console/demoData';
-import type { Currency } from '../../lib/console/types';
-import type { AuthSession } from '../../types/auth';
+import { clearCache } from '../../lib/console/client';
+import { useConsoleMeta, useDisputes } from '../../lib/console/data';
+import type { Txn } from '../../lib/console/models';
+import { ROLE_LABEL, isRole } from '../../lib/permissions';
+import type { AuthBusiness, AuthSession } from '../../types/auth';
 import { cx } from './ui';
-import { canMoveMoney, isPage, type Page, type PageProps } from './nav';
+import { PAGE_LABELS, isPage, type Page, type PageProps } from './nav';
 import CommandPalette from './CommandPalette';
-import NotificationsMenu from './NotificationsMenu';
+import ConnectState from './ConnectState';
 import OverviewPage from './OverviewPage';
 import TransactionsPage from './TransactionsPage';
 import CustomersPage from './CustomersPage';
 import PaymentLinksPage from './PaymentLinksPage';
-import InvoicesPage from './InvoicesPage';
-import SubscriptionsPage from './SubscriptionsPage';
 import RefundsPage from './RefundsPage';
 import DisputesPage from './DisputesPage';
 import ReportsPage from './ReportsPage';
@@ -44,8 +43,6 @@ import DevelopersPage from './DevelopersPage';
 import SettingsPage from './SettingsPage';
 import WithdrawModal from './WithdrawModal';
 import TransactionDrawer from './TransactionDrawer';
-
-export type { Page } from './nav';
 
 type Icon = React.ComponentType<{ className?: string }>;
 
@@ -90,17 +87,16 @@ const GRID_STYLE: React.CSSProperties = {
 interface Toast {
   id: number;
   message: string;
+  tone: 'success' | 'error';
 }
 
 export interface ConsoleProps {
   session: AuthSession;
-  isDemo: boolean;
   onLogout: () => void;
 }
 
 function parseHash(): { page: Page; sub: string | null } {
   const [p, ...rest] = window.location.hash.slice(1).split('/');
-  // Old links: team and withdrawal settings live under Settings now.
   if (p === 'team') return { page: 'settings', sub: 'team' };
   if (p === 'withdrawals') return { page: 'settings', sub: 'payouts' };
   return isPage(p) ? { page: p, sub: rest.join('/') || null } : { page: 'overview', sub: null };
@@ -108,51 +104,22 @@ function parseHash(): { page: Page; sub: string | null } {
 
 export default function Console({ session, onLogout }: ConsoleProps) {
   const theme = useTheme();
+  const [business, setBusiness] = useState<AuthBusiness>(session.business);
   const [route, setRoute] = useState<{ page: Page; sub: string | null }>({ page: 'overview', sub: null });
   const [navOpen, setNavOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [openTxn, setOpenTxn] = useState<Txn | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [withdrawFrom, setWithdrawFrom] = useState<Currency | null>(null);
-  const [openTxnId, setOpenTxnId] = useState<string | null>(null);
 
-  const notify = useCallback((message: string) => {
+  // Live once the business is KYB-approved (`tier_1`); a sandbox account until then.
+  const live = business.tier_1;
+  const inReview = business.status === 'kyb_pending';
+
+  const notify = useCallback((message: string, tone: 'success' | 'error' = 'success') => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-2), { id, message }]);
-    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
-  }, []);
-
-  // Live and sandbox are separate worlds with their own balances, customers
-  // and settings — like a real gateway's test mode. Both stay mounted so
-  // switching back and forth keeps what you did in each.
-  // Only ever rendered client-side (after sign-in), so storage is safe to read here.
-  const [mode, setModeState] = useState<'live' | 'sandbox'>(() => {
-    try {
-      return sessionStorage.getItem('fluxel_mode') === 'sandbox' ? 'sandbox' : 'live';
-    } catch {
-      return 'live';
-    }
-  });
-  const liveStore = useConsoleData(session.business.name, session.user.email, notify);
-  const sandboxStore = useConsoleData(session.business.name, session.user.email, notify, SANDBOX_SEED);
-  const store = mode === 'live' ? liveStore : sandboxStore;
-  const { data } = store;
-
-  const setMode = (next: 'live' | 'sandbox') => {
-    setModeState(next);
-    setOpenTxnId(null);
-    try {
-      sessionStorage.setItem('fluxel_mode', next);
-    } catch {}
-    notify(next === 'live' ? 'Switched to live mode' : 'Switched to sandbox — test data only');
-  };
-
-  // The page lives in the URL hash so a refresh or a shared link lands in the
-  // same place — including drawers, e.g. #invoices/inv_0037.
-  useEffect(() => {
-    const sync = () => setRoute(parseHash());
-    sync();
-    window.addEventListener('hashchange', sync);
-    return () => window.removeEventListener('hashchange', sync);
+    setToasts((t) => [...t.slice(-2), { id, message, tone }]);
+    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === 'error' ? 6000 : 4000);
   }, []);
 
   const navigate = useCallback((page: Page, sub?: string) => {
@@ -160,8 +127,22 @@ export default function Console({ session, onLogout }: ConsoleProps) {
     window.location.hash = sub ? `${page}/${sub}` : page;
     setRoute({ page, sub: sub ?? null });
     setNavOpen(false);
+    setOpenTxn(null);
     if (!samePage) window.scrollTo({ top: 0 });
   }, []);
+
+  // The page lives in the URL hash so a refresh or shared link lands in the same place, drawers included.
+  useEffect(() => {
+    const sync = () => setRoute(parseHash());
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  // The tab title follows the page: "Transactions · Fluxel".
+  useEffect(() => {
+    document.title = `${PAGE_LABELS[route.page]} · Fluxel`;
+  }, [route.page]);
 
   // ⌘K / Ctrl+K opens search from anywhere.
   useEffect(() => {
@@ -175,26 +156,33 @@ export default function Console({ session, onLogout }: ConsoleProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const me = data.team.find((m) => m.isYou);
-  const role = me?.role ?? 'owner';
-  const canWithdraw = canMoveMoney(role);
-  const openTxn = openTxnId ? data.transactions.find((t) => t.id === openTxnId) ?? null : null;
-
+  const role = session.user.roles[0] ?? '';
+  // Every page waits for this browser to be connected to /v1 — see ConnectState.
+  const conn = useConsoleMeta();
+  const connected = Boolean(conn.data);
+  const disputes = useDisputes(connected);
   const badges: Partial<Record<Page, number>> = {
-    disputes: data.disputes.filter((d) => d.status === 'needs_response').length,
+    disputes: (disputes.data ?? []).filter((d) => d.status === 'open' || d.status === 'under_review').length,
   };
 
   const pageProps: PageProps = {
-    data,
-    store,
     role,
+    userEmail: session.user.email,
+    business,
+    onBusinessUpdated: setBusiness,
     sub: route.sub,
     notify,
     onNavigate: navigate,
-    onOpenTxn: setOpenTxnId,
+    onOpenTxn: setOpenTxn,
+    onWithdraw: () => setWithdrawing(true),
   };
 
-  const navItem = ({ id, label, icon: Icon }: { id: Page; label: string; icon: Icon }) => {
+  const signOut = () => {
+    clearCache();
+    onLogout();
+  };
+
+  const navItem = ({ id, label, icon: ItemIcon }: { id: Page; label: string; icon: Icon }) => {
     const active = route.page === id;
     const badge = badges[id];
     return (
@@ -212,12 +200,10 @@ export default function Console({ session, onLogout }: ConsoleProps) {
         )}
       >
         {active && <span aria-hidden className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r bg-brand" />}
-        <Icon className={cx('size-[17px]', active && 'text-brand')} />
+        <ItemIcon className={cx('size-[17px]', active && 'text-brand')} />
         <span className="flex-1">{label}</span>
         {badge ? (
-          <span className="min-w-5 h-5 px-1.5 rounded-full bg-brand text-brand-ink text-[11px] font-bold inline-flex items-center justify-center">
-            {badge}
-          </span>
+          <span className="min-w-5 h-5 px-1.5 rounded-full bg-brand text-brand-ink text-[11px] font-bold inline-flex items-center justify-center">{badge}</span>
         ) : null}
       </a>
     );
@@ -230,6 +216,7 @@ export default function Console({ session, onLogout }: ConsoleProps) {
 
       <div className="relative h-16 shrink-0 px-5 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/fluxel_logo.png" alt="" className="size-8 rounded-lg object-cover ring-1 ring-brand/30" />
           <span className="text-[15px] font-semibold tracking-tight">
             Fluxel <span className="text-brand font-normal">Payments</span>
@@ -251,16 +238,15 @@ export default function Console({ session, onLogout }: ConsoleProps) {
         className="relative mx-3 mt-1 mb-3 px-3 py-2.5 rounded-lg border border-white/10 bg-white/[0.03] text-left hover:border-brand/40 transition-colors cursor-pointer"
       >
         <span className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium truncate">{data.business.tradingName}</span>
-          <span className={cx('text-[10px] font-semibold uppercase tracking-wider', mode === 'live' ? 'text-emerald-400' : 'text-brand')}>
-            {mode === 'live' ? 'Live' : 'Sandbox'}
+          <span className="text-sm font-medium truncate">{business.name}</span>
+          <span className={cx('text-[10px] font-semibold uppercase tracking-wider', live ? 'text-emerald-400' : 'text-brand')}>
+            {live ? 'Live' : 'Sandbox'}
           </span>
         </span>
-        <span className="block mt-0.5 text-[11px] font-mono text-slate-500 truncate">{session.business.id}</span>
+        <span className="block mt-0.5 text-[11px] font-mono text-slate-500 truncate">{business.id}</span>
       </button>
 
       <nav className="relative flex-1 min-h-0 flex flex-col" aria-label="Main">
-        {/* Day-to-day pages scroll (without a visible bar) if the screen is short… */}
         <div className="flex-1 overflow-y-auto no-scrollbar px-3 pb-3">
           {NAV.slice(0, -1).map((group, gi) => (
             <div key={gi} className={gi ? 'mt-4' : ''}>
@@ -269,7 +255,6 @@ export default function Console({ session, onLogout }: ConsoleProps) {
             </div>
           ))}
         </div>
-        {/* …while the Business group stays pinned to the bottom, above the profile. */}
         <div className="shrink-0 px-3 pt-3 pb-3 border-t border-white/10">
           <p className={GROUP_LABEL}>{NAV[NAV.length - 1].label}</p>
           <div className="space-y-0.5">{NAV[NAV.length - 1].items.map(navItem)}</div>
@@ -279,13 +264,13 @@ export default function Console({ session, onLogout }: ConsoleProps) {
       <div className="relative shrink-0 px-3 pb-3 pt-2 border-t border-white/10">
         <div className="flex items-center gap-2.5 px-1 py-1">
           <span className="size-8 shrink-0 rounded-full bg-brand text-brand-ink text-xs font-bold inline-flex items-center justify-center">
-            {(me?.name ?? 'Y').slice(0, 1).toUpperCase()}
+            {session.user.email.slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium truncate">{me?.name ?? session.user.email}</p>
-            <p className="text-xs text-slate-500 truncate" title={session.user.email}>
-              <span className="capitalize">{role}</span> · {session.user.email}
+            <p className="text-sm font-medium truncate" title={session.user.email}>
+              {session.user.email}
             </p>
+            <p className="text-xs text-slate-500 truncate">{isRole(role) ? ROLE_LABEL[role] : role || 'Member'}</p>
           </div>
           <button
             type="button"
@@ -297,7 +282,7 @@ export default function Console({ session, onLogout }: ConsoleProps) {
           </button>
           <button
             type="button"
-            onClick={onLogout}
+            onClick={signOut}
             aria-label="Sign out"
             className="size-8 shrink-0 inline-flex items-center justify-center rounded-lg text-slate-400 hover:text-brand hover:bg-white/[0.06] cursor-pointer"
           >
@@ -341,131 +326,91 @@ export default function Console({ session, onLogout }: ConsoleProps) {
             </button>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div role="radiogroup" aria-label="Environment" className="inline-flex p-0.5 rounded-full bg-subtle border border-line text-[13px] font-medium">
-              {(['live', 'sandbox'] as const).map((m) => {
-                const active = mode === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => !active && setMode(m)}
-                    className={cx(
-                      'inline-flex items-center gap-1.5 h-7 px-3 rounded-full cursor-pointer transition-colors',
-                      active
-                        ? m === 'live'
-                          ? 'bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.08)]'
-                          : 'bg-brand text-brand-ink'
-                        : 'text-ink-3 hover:text-ink'
-                    )}
-                  >
-                    {m === 'live' && <span aria-hidden className={cx('size-1.5 rounded-full', active ? 'bg-positive' : 'bg-ink-3')} />}
-                    {m === 'live' ? 'Live' : 'Sandbox'}
-                  </button>
-                );
-              })}
-            </div>
-            <NotificationsMenu
-              notices={data.notices}
-              onMarkAllRead={store.markNoticesRead}
-              onOpen={(href) => {
-                const [p, sub] = href.split('/');
-                if (isPage(p)) navigate(p, sub);
-                store.markNoticesRead();
-              }}
-            />
-          </div>
-        </div>
-
-        {mode === 'sandbox' && (
-          <div className="sticky top-16 z-20 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 sm:px-8 py-2 bg-gold-soft border-b border-brand/40 text-sm">
-            <p className="text-gold">
-              <span className="font-semibold">Sandbox mode.</span>{' '}
-              <span className="text-ink-2">Test data only — nothing here moves real money.</span>
-            </p>
+          {live ? (
+            <span className="inline-flex items-center gap-2 h-8 px-3 rounded-full border border-line bg-surface text-[13px] font-medium text-ink">
+              <span aria-hidden className="size-1.5 rounded-full bg-positive" />
+              Live
+            </span>
+          ) : (
             <button
               type="button"
-              onClick={store.simulatePayment}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-brand text-brand-ink text-[13px] font-medium hover:bg-brand-strong cursor-pointer"
+              onClick={() => navigate('settings', 'verification')}
+              title={inReview ? 'Verification is being reviewed' : 'Verify your business to accept live payments'}
+              className="inline-flex items-center gap-2 h-8 pl-3 pr-1 rounded-full bg-brand text-brand-ink text-[13px] font-medium hover:bg-brand-strong cursor-pointer"
             >
-              <Zap className="size-4" />
-              Simulate a payment
+              Sandbox
+              <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-brand-ink/10 text-xs">
+                {inReview ? 'In review' : (
+                  <>
+                    <Lock className="size-3" /> Go live
+                  </>
+                )}
+              </span>
             </button>
+          )}
+        </div>
+
+        {!live && (
+          <div className="sticky top-16 z-20 px-4 sm:px-8 py-2 bg-gold-soft border-b border-brand/40 text-sm">
+            <span className="font-semibold text-gold">Sandbox account.</span>{' '}
+            <span className="text-ink-2">
+              {inReview ? 'Your verification is in review — live payments unlock when it’s approved.' : 'Live payments unlock once your business is verified.'}
+            </span>
           </div>
         )}
 
         <main className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-8 py-8 sm:py-10">
-          {route.page === 'overview' && (
-            <OverviewPage
-              data={data}
-              canWithdraw={canWithdraw}
-              onWithdraw={setWithdrawFrom}
-              onNavigate={navigate}
-              onOpenTxn={setOpenTxnId}
-            />
-          )}
-          {route.page === 'transactions' && <TransactionsPage data={data} onOpenTxn={setOpenTxnId} />}
-          {route.page === 'customers' && <CustomersPage {...pageProps} />}
-          {route.page === 'links' && <PaymentLinksPage {...pageProps} />}
-          {route.page === 'invoices' && <InvoicesPage {...pageProps} />}
-          {route.page === 'subscriptions' && <SubscriptionsPage {...pageProps} />}
-          {route.page === 'refunds' && <RefundsPage {...pageProps} />}
-          {route.page === 'disputes' && <DisputesPage {...pageProps} />}
-          {route.page === 'reports' && <ReportsPage {...pageProps} />}
-          {route.page === 'developers' && <DevelopersPage {...pageProps} />}
-          {route.page === 'settings' && <SettingsPage {...pageProps} onWithdraw={setWithdrawFrom} />}
+          {!connected && <ConnectState conn={conn} role={role} notify={notify} />}
+          {connected && route.page === 'overview' && <OverviewPage {...pageProps} />}
+          {connected && route.page === 'transactions' && <TransactionsPage {...pageProps} />}
+          {connected && route.page === 'customers' && <CustomersPage {...pageProps} />}
+          {connected && route.page === 'links' && <PaymentLinksPage {...pageProps} />}
+          {connected && route.page === 'refunds' && <RefundsPage />}
+          {connected && route.page === 'disputes' && <DisputesPage {...pageProps} />}
+          {connected && route.page === 'reports' && <ReportsPage {...pageProps} />}
+          {connected && route.page === 'developers' && <DevelopersPage {...pageProps} />}
+          {connected && route.page === 'settings' && <SettingsPage {...pageProps} />}
         </main>
       </div>
 
       <WithdrawModal
-        from={withdrawFrom}
-        data={data}
-        onClose={() => setWithdrawFrom(null)}
-        onWithdraw={(req) => store.withdraw(req)}
+        open={withdrawing && connected}
+       
+        businessName={business.name}
+        notify={notify}
+        onClose={() => setWithdrawing(false)}
         onManageAccounts={() => {
-          setWithdrawFrom(null);
+          setWithdrawing(false);
           navigate('settings', 'payouts');
         }}
-        onViewTxn={setOpenTxnId}
       />
 
-      <TransactionDrawer
-        txn={openTxn}
-        data={data}
-        canRefund={canWithdraw}
-        onClose={() => setOpenTxnId(null)}
-        onRefund={(id, amount, reason) => {
-          const err = store.refund(id, amount, reason);
-          if (!err) notify('Refund started');
-          return err;
-        }}
-        onNavigate={(p, sub) => {
-          setOpenTxnId(null);
-          navigate(p, sub);
-        }}
-      />
+      <TransactionDrawer txn={openTxn} role={role} onClose={() => setOpenTxn(null)} onNavigate={navigate} notify={notify} />
 
       <CommandPalette
-        open={searchOpen}
+        open={searchOpen && connected}
+       
+        role={role}
         onClose={() => setSearchOpen(false)}
-        data={data}
         onNavigate={navigate}
-        onOpenTxn={setOpenTxnId}
-        onWithdraw={() => setWithdrawFrom('NGN')}
+        onOpenTxn={setOpenTxn}
+        onWithdraw={() => setWithdrawing(true)}
       />
 
       <div className="fixed bottom-4 right-4 left-4 sm:left-auto z-[60] flex flex-col items-end gap-2 pointer-events-none" aria-live="polite">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="fx-toast-in pointer-events-auto flex items-center gap-2.5 max-w-sm rounded-lg bg-[#0a0a0b] text-white text-sm px-4 py-3 shadow-xl border border-brand/25"
+            role={t.tone === 'error' ? 'alert' : undefined}
+            className={cx(
+              'fx-toast-in pointer-events-auto flex items-start gap-2.5 max-w-sm rounded-lg bg-[#0a0a0b] text-white text-sm px-4 py-3 shadow-xl border',
+              t.tone === 'error' ? 'border-negative/50' : 'border-brand/25'
+            )}
           >
-            {t.message.startsWith('Payment received') ? (
-              <ArrowDownLeft className="size-4 text-brand shrink-0" />
+            {t.tone === 'error' ? (
+              <AlertCircle className="size-4 mt-0.5 text-negative shrink-0" />
             ) : (
-              <CheckCircle2 className="size-4 text-brand shrink-0" />
+              <CheckCircle2 className="size-4 mt-0.5 text-brand shrink-0" />
             )}
             <span>{t.message}</span>
           </div>

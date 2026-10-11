@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, Copy, Eye, EyeOff, X } from 'lucide-react';
+import { AlertCircle, Check, Copy, Eye, EyeOff, Loader2, RotateCw, X } from 'lucide-react';
 
-import { formatMoney, initials } from '../../lib/console/format';
-import type { Currency, TxnStatus } from '../../lib/console/types';
+import { initials, titleCase } from '../../lib/console/format';
+import { formatMajor, formatMinor } from '../../lib/console/money';
+import type { Asset } from '../../lib/console/models';
 
 /*
  * The console's building blocks. Everything takes its colour from the tokens
@@ -208,24 +209,34 @@ export function Segmented<T extends string>({
 /* Data display                                                        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * An amount. Pass `minor` (a decimal string in minor units, straight from the
+ * API) with `assets` so the right decimals are used, or `value` in whole units.
+ */
 export function Money({
-  amount,
-  currency,
+  minor,
+  value,
+  asset,
+  assets,
   sign,
+  negative,
   compact,
   className,
 }: {
-  amount: number;
-  currency: Currency;
+  minor?: string | null;
+  value?: number;
+  asset: string;
+  assets?: Asset[];
   sign?: boolean;
+  negative?: boolean;
   compact?: boolean;
   className?: string;
 }) {
-  return (
-    <span className={cx('tabular-nums tracking-tight', className)}>
-      {formatMoney(amount, currency, { sign, compact })}
-    </span>
-  );
+  const text =
+    value !== undefined
+      ? formatMajor(negative ? -value : value, asset, { sign, compact })
+      : formatMinor(minor, asset, assets, { sign, compact, negative });
+  return <span className={cx('tabular-nums tracking-tight', className)}>{text}</span>;
 }
 
 export type Tone = 'positive' | 'pending' | 'negative' | 'neutral' | 'info';
@@ -249,21 +260,50 @@ export function Pill({ tone, children, pulse }: { tone: Tone; children: React.Re
   );
 }
 
-const STATUS_STYLE: Record<TxnStatus, { label: string; dot: string; text: string }> = {
-  successful: { label: 'Successful', dot: 'bg-positive', text: 'text-positive' },
-  pending: { label: 'Pending', dot: 'bg-pending animate-pulse', text: 'text-pending' },
-  processing: { label: 'Processing', dot: 'bg-pending animate-pulse', text: 'text-pending' },
-  failed: { label: 'Failed', dot: 'bg-negative', text: 'text-negative' },
+/** The API's status words, mapped to a tone. Unknown words are shown neutrally, never hidden. */
+const STATUS_TONE: Record<string, Tone> = {
+  completed: 'positive',
+  confirmed: 'positive',
+  settled: 'positive',
+  successful: 'positive',
+  succeeded: 'positive',
+  delivered: 'positive',
+  fulfilled: 'positive',
+  active: 'positive',
+  resolved: 'positive',
+  won: 'positive',
+  pending: 'pending',
+  processing: 'pending',
+  confirming: 'pending',
+  initiated: 'pending',
+  held: 'pending',
+  pending_review: 'pending',
+  under_review: 'pending',
+  open: 'pending',
+  retrying: 'pending',
+  ready: 'pending',
+  underpaid: 'pending',
+  failed: 'negative',
+  rejected: 'negative',
+  reversed: 'negative',
+  expired: 'neutral',
+  exhausted: 'negative',
+  frozen: 'negative',
+  lost: 'negative',
+  voided: 'neutral',
+  cancelled: 'neutral',
+  disabled: 'neutral',
 };
 
+const PULSING = new Set(['pending', 'processing', 'confirming', 'retrying']);
+
 /** Status is always a word next to the dot — never colour alone. */
-export function StatusBadge({ status }: { status: TxnStatus }) {
-  const s = STATUS_STYLE[status];
+export function StatusBadge({ status }: { status: string }) {
+  const tone = STATUS_TONE[status] ?? 'neutral';
   return (
-    <span className={cx('inline-flex items-center gap-1.5 text-[13px] font-medium', s.text)}>
-      <span aria-hidden className={cx('size-1.5 rounded-full', s.dot)} />
-      {s.label}
-    </span>
+    <Pill tone={tone} pulse={PULSING.has(status)}>
+      {titleCase(status)}
+    </Pill>
   );
 }
 
@@ -664,3 +704,71 @@ export const textareaClass =
 
 /** A plain native select in the console's field style. */
 export const selectClass = `${inputClass} cursor-pointer`;
+
+/* ------------------------------------------------------------------ */
+/* Loading & errors                                                    */
+/* ------------------------------------------------------------------ */
+
+export function Skeleton({ className }: { className?: string }) {
+  return <span aria-hidden className={cx('block rounded-md bg-subtle animate-pulse', className)} />;
+}
+
+/** Placeholder rows while a list loads. */
+export function LoadingRows({ rows = 5 }: { rows?: number }) {
+  return (
+    <ul aria-busy="true" aria-label="Loading" className="divide-y divide-line">
+      {Array.from({ length: rows }, (_, i) => (
+        <li key={i} className="flex items-center gap-3 px-5 py-4">
+          <Skeleton className="size-9 rounded-full" />
+          <span className="flex-1 space-y-2">
+            <Skeleton className="h-3.5 w-1/3" />
+            <Skeleton className="h-3 w-1/5" />
+          </span>
+          <Skeleton className="h-4 w-20" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div role="alert" className="px-6 py-12 text-center">
+      <AlertCircle className="mx-auto size-6 text-negative" />
+      <p className="mt-3 text-sm font-medium text-ink">Couldn’t load this</p>
+      <p className="mt-1 text-sm text-ink-3 max-w-md mx-auto">{message}</p>
+      {onRetry && (
+        <Button size="sm" className="mt-4" onClick={onRetry}>
+          <RotateCw className="size-4" />
+          Try again
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** A button that shows a spinner while its async action runs, and can't be double-clicked. */
+export function AsyncButton({
+  onClick,
+  children,
+  ...rest
+}: Omit<React.ComponentProps<typeof Button>, 'onClick'> & { onClick: () => Promise<unknown> | void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      {...rest}
+      disabled={busy || rest.disabled}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await onClick();
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy && <Loader2 className="size-4 animate-spin" />}
+      {children}
+    </Button>
+  );
+}

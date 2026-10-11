@@ -1,172 +1,114 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Check, Copy, RotateCcw } from 'lucide-react';
+import { ExternalLink, Flag } from 'lucide-react';
 
-import { formatDateTime, formatMoney, NGN_PER_USDT } from '../../lib/console/format';
-import type { ConsoleData, Transaction } from '../../lib/console/types';
-import { DISPUTE_STATUS, type Page } from './nav';
-import { RefundModal, canRefund as isRefundable, refundableLeft } from './RefundsPage';
-import { Button, DetailList, Drawer, Money, Pill, StatusBadge } from './ui';
-import { DirectionIcon, signedAmount, txnTitle } from './txn';
+import { invalidate, v1 } from '../../lib/console/client';
+import { useAssets, useCustomers, useDisputes } from '../../lib/console/data';
+import { formatDateTime, titleCase } from '../../lib/console/format';
+import { CHAIN_LABEL, decimalsFor, toMajor } from '../../lib/console/money';
+import type { Dispute, Txn } from '../../lib/console/models';
+import { can } from '../../lib/permissions';
+import { DIRECTION_LABEL, type Notify, type Page } from './nav';
+import { AsyncButton, Button, CopyButton, DetailList, Drawer, Field, Modal, Money, StatusBadge, textareaClass } from './ui';
+import { DirectionIcon, customerLabel, txnMethod, txnTitle } from './txn';
 
-function CopyValue({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
+const EXPLORER: Record<string, (tx: string) => string> = {
+  ethereum: (tx) => `https://etherscan.io/tx/${tx}`,
+  eth: (tx) => `https://etherscan.io/tx/${tx}`,
+  bsc: (tx) => `https://bscscan.com/tx/${tx}`,
+  tron: (tx) => `https://tronscan.org/#/transaction/${tx}`,
+  bitcoin: (tx) => `https://mempool.space/tx/${tx}`,
+  btc: (tx) => `https://mempool.space/tx/${tx}`,
+};
+
+function Mono({ value }: { value: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[13px]">
+    <span className="inline-flex items-center gap-1 font-mono text-[13px] break-all">
       {value}
-      <button
-        type="button"
-        aria-label={`Copy ${value}`}
-        onClick={() => {
-          navigator.clipboard?.writeText(value).catch(() => {});
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1500);
-        }}
-        className="size-6 inline-flex items-center justify-center rounded text-ink-3 hover:text-ink hover:bg-subtle cursor-pointer"
-      >
-        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-      </button>
+      <CopyButton value={value} />
     </span>
   );
 }
 
-function LinkButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className="text-left underline underline-offset-4 decoration-brand hover:decoration-2 cursor-pointer">
-      {children}
-    </button>
-  );
-}
-
-const TRIGGER_LABEL = { manual: 'Manual', automatic: 'Automatic rule', scheduled: 'Schedule' } as const;
-
 export default function TransactionDrawer({
   txn,
-  data,
-  canRefund,
+  role,
   onClose,
-  onRefund,
   onNavigate,
+  notify,
 }: {
-  txn: Transaction | null;
-  data: ConsoleData;
-  canRefund: boolean;
+  txn: Txn | null;
+  role: string;
   onClose: () => void;
-  onRefund: (txnId: string, amount: number, reason: string) => string | null;
   onNavigate: (page: Page, sub?: string) => void;
+  notify: Notify;
 }) {
-  const [refunding, setRefunding] = useState(false);
+  const { data: assets } = useAssets();
+  const { data: customers } = useCustomers();
+  const { data: disputes } = useDisputes();
+  const [disputing, setDisputing] = useState(false);
+  const [reason, setReason] = useState('');
+
   if (!txn) return null;
 
-  const customer = data.customers.find((c) => c.id === txn.customerId);
-  const destination = data.destinations.find((d) => d.id === txn.destinationId);
-  const link = txn.linkId ? data.links.find((l) => l.id === txn.linkId) : undefined;
-  const invoice = txn.invoiceId ? data.invoices.find((i) => i.id === txn.invoiceId) : undefined;
-  const subscription = txn.subscriptionId ? data.subscriptions.find((s) => s.id === txn.subscriptionId) : undefined;
-  const plan = subscription ? data.plans.find((p) => p.id === subscription.planId) : undefined;
-  const dispute = txn.disputeId ? data.disputes.find((d) => d.id === txn.disputeId) : undefined;
-  const refunds = data.refunds.filter((r) => r.txnId === txn.id);
-  const inbound = txn.kind === 'payment';
+  const dispute: Dispute | undefined = disputes?.find((d) => d.transaction_id === txn.id);
+  const decimals = decimalsFor(txn.asset_code, assets);
+  const net = toMajor(txn.amount, decimals) - toMajor(txn.fee, decimals);
+  const explorer = txn.txid && txn.chain ? EXPLORER[txn.chain]?.(txn.txid) : undefined;
 
   const items: { term: string; detail: React.ReactNode }[] = [
     { term: 'Status', detail: <StatusBadge status={txn.status} /> },
-    { term: 'Date', detail: formatDateTime(txn.createdAt) },
-    { term: 'Reference', detail: <CopyValue value={txn.reference} /> },
-    { term: 'Method', detail: txn.method },
+    { term: 'Type', detail: `${DIRECTION_LABEL[txn.direction]} · ${txnMethod(txn)}` },
+    { term: 'Date', detail: formatDateTime(txn.created_at) },
+    { term: 'Transaction ID', detail: <Mono value={txn.id} /> },
   ];
-
-  if (inbound && customer) {
+  if (txn.customer_id) {
     items.push({
-      term: 'Customer',
+      term: txn.direction === 'transfer' ? 'From' : 'Customer',
       detail: (
-        <span>
-          <LinkButton onClick={() => onNavigate('customers', customer.id)}>{customer.name}</LinkButton>
-          <br />
-          <span className="text-ink-3">{customer.email}</span>
+        <button
+          type="button"
+          onClick={() => onNavigate('customers', txn.customer_id!)}
+          className="text-left underline underline-offset-4 decoration-brand hover:decoration-2 cursor-pointer"
+        >
+          {customerLabel(txn.customer_id, customers)}
+        </button>
+      ),
+    });
+  }
+  if (txn.to_customer_id) items.push({ term: 'To', detail: customerLabel(txn.to_customer_id, customers) });
+  items.push({ term: 'Amount', detail: <Money minor={txn.amount} asset={txn.asset_code} assets={assets} /> });
+  items.push({ term: 'Fee', detail: <Money minor={txn.fee} asset={txn.asset_code} assets={assets} /> });
+  if (txn.direction === 'in') {
+    items.push({ term: 'You received', detail: <Money value={net} asset={txn.asset_code} className="font-medium" /> });
+  }
+  if (txn.chain) items.push({ term: 'Network', detail: CHAIN_LABEL[txn.chain] ?? titleCase(txn.chain) });
+  if (txn.confirmations !== null && txn.confirmations !== undefined) items.push({ term: 'Confirmations', detail: txn.confirmations });
+  if (txn.txid) {
+    items.push({
+      term: 'Blockchain hash',
+      detail: (
+        <span className="space-y-1">
+          <Mono value={txn.txid} />
+          {explorer && (
+            <a href={explorer} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-gold hover:underline">
+              View on explorer <ExternalLink className="size-3" />
+            </a>
+          )}
         </span>
       ),
     });
   }
-  if (inbound) {
-    items.push({
-      term: 'Source',
-      detail: link ? (
-        <LinkButton onClick={() => onNavigate('links', link.id)}>Payment link · {link.title}</LinkButton>
-      ) : invoice ? (
-        <LinkButton onClick={() => onNavigate('invoices', invoice.id)}>Invoice {invoice.number}</LinkButton>
-      ) : plan ? (
-        <LinkButton onClick={() => onNavigate('subscriptions')}>Subscription · {plan.name}</LinkButton>
-      ) : (
-        `Checkout · ${txn.narration}`
-      ),
-    });
-  }
-
-  if (!inbound && destination) {
-    items.push({
-      term: 'Paid to',
-      detail:
-        destination.type === 'bank' ? (
-          <span>
-            {destination.accountName}
-            <br />
-            <span className="text-ink-3">
-              {destination.bankName} · <span className="font-mono">{destination.accountNumber}</span>
-            </span>
-          </span>
-        ) : (
-          <span>
-            {destination.label}
-            <br />
-            <span className="text-ink-3 font-mono text-xs break-all">{destination.address}</span>
-          </span>
-        ),
-    });
-    if (txn.trigger) items.push({ term: 'Started by', detail: TRIGGER_LABEL[txn.trigger] });
-  }
-
-  items.push({ term: 'Amount', detail: <Money amount={txn.amount} currency={txn.currency} /> });
-  items.push({ term: 'Fee', detail: <Money amount={txn.fee} currency={txn.currency} /> });
-  items.push(
-    inbound
-      ? { term: 'You received', detail: <Money amount={txn.amount - txn.fee} currency={txn.currency} className="font-medium" /> }
-      : { term: 'Total debited', detail: <Money amount={txn.amount + txn.fee} currency={txn.currency} className="font-medium" /> }
-  );
-  if (txn.refunded) {
-    items.push({
-      term: 'Refunded',
-      detail: (
-        <span>
-          <Money amount={txn.refunded} currency={txn.currency} className="font-medium" />
-          <span className="text-ink-3"> · {txn.refunded >= txn.amount ? 'full' : 'partial'}</span>
-          {refunds.map((r) => (
-            <span key={r.id} className="block text-xs text-ink-3">
-              {r.reference} · {r.reason}
-            </span>
-          ))}
-        </span>
-      ),
-    });
-  }
+  if (txn.provider_ref) items.push({ term: 'Bank reference', detail: <Mono value={txn.provider_ref} /> });
   if (dispute) {
     items.push({
       term: 'Dispute',
       detail: (
-        <LinkButton onClick={() => onNavigate('disputes', dispute.id)}>
-          <Pill tone={DISPUTE_STATUS[dispute.status].tone}>{DISPUTE_STATUS[dispute.status].label}</Pill>
-        </LinkButton>
-      ),
-    });
-  }
-  if (txn.converted) {
-    items.push({
-      term: 'Converted to',
-      detail: (
-        <span>
-          <Money amount={txn.converted.amount} currency={txn.converted.currency} className="font-medium" />
-          <br />
-          <span className="text-xs text-ink-3">at {formatMoney(NGN_PER_USDT, 'NGN')} / USDT</span>
+        <span className="space-y-1">
+          <StatusBadge status={dispute.status} />
+          <span className="block text-xs text-ink-3">{dispute.reason}</span>
+          {dispute.resolution_note && <span className="block text-xs text-ink-2">{dispute.resolution_note}</span>}
         </span>
       ),
     });
@@ -174,23 +116,70 @@ export default function TransactionDrawer({
 
   return (
     <>
-      <Drawer open onClose={onClose} title={inbound ? 'Payment' : 'Withdrawal'}>
+      <Drawer open onClose={onClose} title={DIRECTION_LABEL[txn.direction]}>
         <div className="flex items-center gap-3 mb-6">
-          <DirectionIcon txn={txn} />
+          <DirectionIcon direction={txn.direction} />
           <div className="min-w-0">
-            <p className="text-sm text-ink-2 truncate">{txnTitle(txn, data)}</p>
-            <Money amount={signedAmount(txn)} currency={txn.currency} sign className="block text-2xl font-medium text-ink" />
+            <p className="text-sm text-ink-2 truncate">{txnTitle(txn, customers)}</p>
+            <Money
+              minor={txn.amount}
+              asset={txn.asset_code}
+              assets={assets}
+              sign={txn.direction !== 'transfer'}
+              negative={txn.direction === 'out'}
+              className="block text-2xl font-semibold text-ink"
+            />
           </div>
         </div>
         <DetailList items={items} />
-        {canRefund && isRefundable(txn) && (
-          <Button className="mt-6" onClick={() => setRefunding(true)}>
-            <RotateCcw className="size-4" />
-            Refund{txn.refunded ? ` remaining ${formatMoney(refundableLeft(txn), txn.currency)}` : ''}
+        {!dispute && can(role, 'payouts.write') && (
+          <Button className="mt-6" onClick={() => setDisputing(true)}>
+            <Flag className="size-4" />
+            Report a problem
           </Button>
         )}
       </Drawer>
-      {refunding && <RefundModal txn={txn} data={data} onClose={() => setRefunding(false)} onRefund={onRefund} />}
+
+      {disputing && (
+        <Modal
+          open
+          onClose={() => setDisputing(false)}
+          title="Report a problem with this transaction"
+          description="Opens a dispute with Fluxel. Our team reviews it and the outcome shows on the Disputes page."
+          footer={
+            <>
+              <Button onClick={() => setDisputing(false)}>Cancel</Button>
+              <AsyncButton
+                variant="primary"
+                disabled={reason.trim().length < 10}
+                onClick={async () => {
+                  try {
+                    await v1.post('disputes', { transaction_id: txn.id, reason: reason.trim() });
+                    invalidate(`disputes`);
+                    notify('Dispute opened — we’ll update you on the Disputes page');
+                    setDisputing(false);
+                    setReason('');
+                  } catch (e) {
+                    notify(e instanceof Error ? e.message : 'Could not open the dispute', 'error');
+                  }
+                }}
+              >
+                Open dispute
+              </AsyncButton>
+            </>
+          }
+        >
+          <Field label="What went wrong?" htmlFor="dispute-reason" hint="At least 10 characters.">
+            <textarea
+              id="dispute-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="The customer was charged twice for the same order…"
+              className={textareaClass}
+            />
+          </Field>
+        </Modal>
+      )}
     </>
   );
 }

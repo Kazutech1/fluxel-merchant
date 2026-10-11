@@ -15,6 +15,7 @@ import { errorResponse, readField, readJsonBody } from '@/app/lib/server/dashboa
 
 import type { AuthBusiness } from '@/app/types/auth';
 import type { ApiKeySummary, CreatedApiKey } from '@/app/types/business';
+import { requirePermission } from '@/app/lib/server/authorize';
 
 export async function GET(): Promise<Response> {
   try {
@@ -25,6 +26,8 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const denied = await requirePermission('keys.manage');
+  if (denied) return denied;
   const body = await readJsonBody(request);
   const keyClass = readField(body, 'key_class');
   const env = readField(body, 'env');

@@ -3,95 +3,79 @@
 import React, { useState } from 'react';
 import { Check, Minus, UserPlus } from 'lucide-react';
 
-import { formatRelativeInline } from '../../lib/console/format';
-import type { ConsoleData, Role, TeamMember } from '../../lib/console/types';
-import type { ConsoleActions } from '../../lib/console/useConsoleData';
-import { Avatar, Button, Card, CardHeader, Field, Modal, PageHeader, Tag, controlClass, cx, inputClass } from './ui';
-
-export const ROLE_LABEL: Record<Role, string> = {
-  owner: 'Owner',
-  admin: 'Admin',
-  finance: 'Finance',
-  viewer: 'Viewer',
-};
-
-const ROLE_SUMMARY: Record<Role, string> = {
-  owner: 'Full control, including ownership',
-  admin: 'Everything except ownership',
-  finance: 'Withdraws and reconciles money',
-  viewer: 'Can look, can’t change anything',
-};
-
-const ROLES: Role[] = ['owner', 'admin', 'finance', 'viewer'];
-
-const PERMISSIONS: { label: string; roles: Role[] }[] = [
-  { label: 'See balances, transactions and customers', roles: ['owner', 'admin', 'finance', 'viewer'] },
-  { label: 'Export reports', roles: ['owner', 'admin', 'finance'] },
-  { label: 'Withdraw money', roles: ['owner', 'admin', 'finance'] },
-  { label: 'Add payout accounts and change payout settings', roles: ['owner', 'admin'] },
-  { label: 'Invite and manage team members', roles: ['owner', 'admin'] },
-  { label: 'Transfer ownership or close the account', roles: ['owner'] },
-];
+import { dash, invalidate } from '../../lib/console/client';
+import { useTeam } from '../../lib/console/data';
+import type { TeamMember } from '../../lib/console/models';
+import { PERMISSION_ROWS, ROLES, ROLE_LABEL, ROLE_SUMMARY, can, isRole, type Role } from '../../lib/permissions';
+import type { Notify } from './nav';
+import {
+  AsyncButton,
+  Avatar,
+  Button,
+  Card,
+  CardHeader,
+  CopyField,
+  ErrorState,
+  Field,
+  LoadingRows,
+  Modal,
+  controlClass,
+  cx,
+  inputClass,
+} from './ui';
 
 const selectClass = cx(controlClass, 'h-9 !w-auto pr-8 sm:text-sm cursor-pointer');
 
 function InviteModal({
-  onClose,
-  onInvite,
+  actingRole,
   existing,
+  onClose,
+  onInvited,
 }: {
-  onClose: () => void;
-  onInvite: (name: string, email: string, role: Role) => void;
+  actingRole: string;
   existing: TeamMember[];
+  onClose: () => void;
+  onInvited: (email: string, password: string) => void;
 }) {
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Role>('finance');
-  const [touched, setTouched] = useState(false);
-
+  const [role, setRole] = useState<Role>('developer');
+  const [error, setError] = useState<string | null>(null);
+  // Only an owner can make another owner (Doc 8 §4: admins can't transfer ownership).
+  const grantable = ROLES.filter((r) => r !== 'owner' || actingRole === 'owner');
   const trimmed = email.trim().toLowerCase();
-  const error = !name.trim()
-    ? 'Enter their name.'
-    : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
-      ? 'Enter a valid email address.'
-      : existing.some((m) => m.email.toLowerCase() === trimmed)
-        ? 'This person is already on your team.'
-        : null;
-
-  const submit = () => {
-    setTouched(true);
-    if (error) return;
-    onInvite(name.trim(), trimmed, role);
-    onClose();
-  };
+  const dupe = existing.some((m) => m.email.toLowerCase() === trimmed);
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) && !dupe;
 
   return (
     <Modal
       open
       onClose={onClose}
       title="Invite a teammate"
-      description="They'll get an email to set up their login."
+      description="They’ll sign in with their email and a temporary password you share with them."
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit}>
-            Send invite
-          </Button>
+          <AsyncButton
+            variant="primary"
+            disabled={!valid}
+            onClick={async () => {
+              setError(null);
+              try {
+                const created = await dash.post<TeamMember & { temp_password?: string }>('team', { email: trimmed, role });
+                invalidate('team');
+                onInvited(trimmed, created.temp_password ?? '');
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not invite them.');
+              }
+            }}
+          >
+            Invite
+          </AsyncButton>
         </>
       }
     >
-      <form
-        noValidate
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-        className="space-y-5"
-      >
-        <Field label="Full name" htmlFor="invite-name">
-          <input id="invite-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada Lovelace" className={inputClass} />
-        </Field>
-        <Field label="Work email" htmlFor="invite-email" error={touched && error ? error : undefined}>
+      <div className="space-y-5">
+        <Field label="Work email" htmlFor="invite-email" error={dupe ? 'They’re already on your team.' : undefined}>
           <input
             id="invite-email"
             type="email"
@@ -106,8 +90,8 @@ function InviteModal({
         </Field>
         <fieldset>
           <legend className="block text-sm font-medium text-ink-2 mb-2">Role</legend>
-          <div className="space-y-2">
-            {ROLES.filter((r) => r !== 'owner').map((r) => (
+          <div className="grid sm:grid-cols-2 gap-2">
+            {grantable.map((r) => (
               <label
                 key={r}
                 className={cx(
@@ -115,14 +99,7 @@ function InviteModal({
                   role === r ? 'border-gold ring-2 ring-brand/30 bg-gold-soft' : 'border-line hover:border-line-strong'
                 )}
               >
-                <input
-                  type="radio"
-                  name="role"
-                  value={r}
-                  checked={role === r}
-                  onChange={() => setRole(r)}
-                  className="mt-0.5 accent-[var(--color-brand)]"
-                />
+                <input type="radio" name="role" value={r} checked={role === r} onChange={() => setRole(r)} className="mt-0.5 accent-[var(--color-brand)]" />
                 <span>
                   <span className="block text-sm font-medium text-ink">{ROLE_LABEL[r]}</span>
                   <span className="block text-xs text-ink-3">{ROLE_SUMMARY[r]}</span>
@@ -131,119 +108,119 @@ function InviteModal({
             ))}
           </div>
         </fieldset>
-        <button type="submit" hidden />
-      </form>
+        {error && <p role="alert" className="text-sm text-negative">{error}</p>}
+      </div>
     </Modal>
   );
 }
 
-export default function TeamPage({
-  data,
-  store,
-  role,
-  notify,
-  embedded = false,
-}: {
-  data: ConsoleData;
-  store: ConsoleActions;
-  role: Role;
-  notify: (message: string) => void;
-  /** Rendered inside Settings: no page header, invite sits on the card. */
-  embedded?: boolean;
-}) {
+export default function TeamPage({ role, userEmail, notify }: { role: string; userEmail: string; notify: Notify }) {
+  const team = useTeam();
   const [inviting, setInviting] = useState(false);
+  const [invited, setInvited] = useState<{ email: string; password: string } | null>(null);
   const [removing, setRemoving] = useState<TeamMember | null>(null);
-  const canManage = role === 'owner' || role === 'admin';
-
-  const inviteButton = canManage && (
-    <Button variant="primary" size={embedded ? 'sm' : 'md'} onClick={() => setInviting(true)}>
-      <UserPlus className="size-4" />
-      Invite
-    </Button>
-  );
+  const manage = can(role, 'team.manage');
+  const me = userEmail.toLowerCase();
 
   return (
     <>
-      {!embedded && <PageHeader
-        title="Team"
-        description="Who can access this account, and what they can do."
-        actions={inviteButton}
-      />}
-
       <Card className="overflow-hidden">
-        <CardHeader title="Members" description={`${data.team.length} people`} actions={embedded ? inviteButton : undefined} />
-        <ul className="border-t border-line divide-y divide-line">
-          {data.team.map((m) => {
-            const editable = canManage && !m.isYou && m.role !== 'owner';
-            return (
-              <li key={m.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 px-5 py-3.5">
-                <Avatar name={m.name} />
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
-                    {m.name}
-                    {m.isYou && <span className="text-ink-3 font-normal">(you)</span>}
-                    {m.status === 'invited' && <Tag>Invite sent</Tag>}
-                  </p>
-                  <p className="text-xs text-ink-3 truncate">{m.email}</p>
-                </div>
-                <span className="hidden md:block w-28 text-xs text-ink-3">
-                  {m.status === 'invited' ? 'Not joined yet' : `Active ${formatRelativeInline(m.lastActiveAt)}`}
-                </span>
-                <div className="flex items-center gap-2 ml-12 sm:ml-0">
-                  {editable ? (
-                    <select
-                      aria-label={`Role for ${m.name}`}
-                      value={m.role}
-                      onChange={(e) => {
-                        const next = e.target.value as Role;
-                        store.updateMemberRole(m.id, next);
-                        notify(`${m.name}'s role changed to ${ROLE_LABEL[next]}`);
-                      }}
-                      className={selectClass}
-                    >
-                      {ROLES.filter((r) => r !== 'owner').map((r) => (
-                        <option key={r} value={r}>
-                          {ROLE_LABEL[r]}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="inline-flex items-center h-9 px-3 text-sm text-ink-2">{ROLE_LABEL[m.role]}</span>
-                  )}
-                  {editable && (
-                    <Button size="sm" variant="ghost" onClick={() => setRemoving(m)}>
-                      {m.status === 'invited' ? 'Revoke' : 'Remove'}
-                    </Button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <CardHeader
+          title="Members"
+          description={team.data ? `${team.data.length} ${team.data.length === 1 ? 'person' : 'people'}` : undefined}
+          actions={
+            manage && (
+              <Button variant="primary" size="sm" onClick={() => setInviting(true)}>
+                <UserPlus className="size-4" />
+                Invite
+              </Button>
+            )
+          }
+        />
+        <div className="border-t border-line">
+          {team.loading ? (
+            <LoadingRows rows={3} />
+          ) : team.error ? (
+            <ErrorState message={team.error.message} onRetry={team.reload} />
+          ) : (
+            <ul className="divide-y divide-line">
+              {team.data!.map((m) => {
+                const isYou = m.email.toLowerCase() === me;
+                // Owners are only edited by owners; nobody edits themselves.
+                const editable = manage && !isYou && (m.role !== 'owner' || role === 'owner');
+                const grantable = ROLES.filter((r) => r !== 'owner' || role === 'owner');
+                return (
+                  <li key={m.id} className="flex flex-wrap sm:flex-nowrap items-center gap-3 px-5 py-3.5">
+                    <Avatar name={m.email} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-ink truncate">
+                        {m.email}
+                        {isYou && <span className="ml-1.5 text-ink-3 font-normal">(you)</span>}
+                      </p>
+                      <p className="text-xs text-ink-3">{isRole(m.role) ? ROLE_SUMMARY[m.role] : m.role}</p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-12 sm:ml-0">
+                      {editable ? (
+                        <select
+                          aria-label={`Role for ${m.email}`}
+                          value={m.role}
+                          onChange={async (e) => {
+                            const next = e.target.value as Role;
+                            try {
+                              await dash.put(`team/${m.id}`, { role: next });
+                              invalidate('team');
+                              notify(`${m.email} is now ${ROLE_LABEL[next]}`);
+                            } catch (err) {
+                              notify(err instanceof Error ? err.message : 'Could not change the role', 'error');
+                            }
+                          }}
+                          className={selectClass}
+                        >
+                          {grantable.map((r) => (
+                            <option key={r} value={r}>
+                              {ROLE_LABEL[r]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="inline-flex items-center h-9 px-3 text-sm text-ink-2">{isRole(m.role) ? ROLE_LABEL[m.role] : m.role}</span>
+                      )}
+                      {editable && (
+                        <Button size="sm" variant="ghost" onClick={() => setRemoving(m)}>
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </Card>
 
       <Card className="mt-6 overflow-hidden">
-        <CardHeader title="Roles and permissions" description="What each role can do." />
+        <CardHeader title="Roles and permissions" description="What each role can do (Fluxel Doc 8 §4)." />
         <div className="overflow-x-auto border-t border-line">
-          <table className="w-full min-w-[560px] text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="border-b border-line">
                 <th className="text-left font-medium text-xs text-ink-3 px-5 py-3">Permission</th>
                 {ROLES.map((r) => (
-                  <th key={r} className="font-medium text-xs text-ink-3 px-3 py-3 w-24 text-center">
+                  <th key={r} className="font-medium text-xs text-ink-3 px-2 py-3 w-20 text-center">
                     {ROLE_LABEL[r]}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {PERMISSIONS.map((p) => (
-                <tr key={p.label}>
+              {PERMISSION_ROWS.map((p) => (
+                <tr key={p.permission}>
                   <td className="px-5 py-3 text-ink">{p.label}</td>
                   {ROLES.map((r) => (
-                    <td key={r} className="px-3 py-3 text-center">
-                      {p.roles.includes(r) ? (
-                        <Check className="inline size-4 text-ink" aria-label="Allowed" />
+                    <td key={r} className="px-2 py-3 text-center">
+                      {can(r, p.permission) ? (
+                        <Check className="inline size-4 text-gold" aria-label="Allowed" />
                       ) : (
                         <Minus className="inline size-4 text-line-strong" aria-label="Not allowed" />
                       )}
@@ -256,40 +233,58 @@ export default function TeamPage({
         </div>
       </Card>
 
-      {inviting && (
+      {inviting && team.data && (
         <InviteModal
-          existing={data.team}
+          actingRole={role}
+          existing={team.data}
           onClose={() => setInviting(false)}
-          onInvite={(name, email, r) => {
-            store.inviteMember(name, email, r);
-            notify(`Invite sent to ${email}`);
+          onInvited={(email, password) => {
+            setInviting(false);
+            setInvited({ email, password });
           }}
         />
+      )}
+
+      {invited && (
+        <Modal
+          open
+          onClose={() => setInvited(null)}
+          title="Teammate added"
+          description={`Share this temporary password with ${invited.email} directly — over a call or a password manager, not email. They should change it after signing in.`}
+          footer={
+            <Button variant="primary" onClick={() => setInvited(null)}>
+              Done
+            </Button>
+          }
+        >
+          {invited.password ? <CopyField value={invited.password} secret /> : <p className="text-sm text-ink-2">Use the password you set for them.</p>}
+        </Modal>
       )}
 
       {removing && (
         <Modal
           open
           onClose={() => setRemoving(null)}
-          title={removing.status === 'invited' ? 'Revoke invite?' : `Remove ${removing.name}?`}
-          description={
-            removing.status === 'invited'
-              ? `${removing.email} won't be able to use their invite link.`
-              : `${removing.name} will lose access to this account straight away.`
-          }
+          title={`Remove ${removing.email}?`}
+          description="They lose access to this business straight away."
           footer={
             <>
               <Button onClick={() => setRemoving(null)}>Cancel</Button>
-              <Button
+              <AsyncButton
                 variant="danger"
-                onClick={() => {
-                  store.removeMember(removing.id);
-                  notify(removing.status === 'invited' ? 'Invite revoked' : `${removing.name} removed`);
-                  setRemoving(null);
+                onClick={async () => {
+                  try {
+                    await dash.del(`team/${removing.id}`);
+                    invalidate('team');
+                    notify(`${removing.email} removed`);
+                    setRemoving(null);
+                  } catch (e) {
+                    notify(e instanceof Error ? e.message : 'Could not remove them', 'error');
+                  }
                 }}
               >
-                {removing.status === 'invited' ? 'Revoke invite' : 'Remove'}
-              </Button>
+                Remove
+              </AsyncButton>
             </>
           }
         >

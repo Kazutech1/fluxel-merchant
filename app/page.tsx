@@ -8,58 +8,17 @@ import Console from './components/console/Console';
 import { fetchSession, logout as endSession } from './lib/auth';
 import type { AuthSession } from './types/auth';
 
-/** Marks a demo sign-in for this tab, so a refresh doesn't drop back to sign-in. */
-const DEMO_KEY = 'fluxel_demo_session';
-
-const DEMO_SESSION: AuthSession = {
-  user: { id: 'usr_demo', email: 'ada@kazstores.ng', roles: ['owner'] },
-  business: {
-    id: 'biz_01JDEMO7KAZSTORES',
-    name: 'Kaz Stores Ltd',
-    status: 'active',
-    tier_1: true,
-    settlement_preference: 'accumulate',
-  },
-};
-
 export default function App() {
-  // Auth state. The tokens themselves are never here — they live in httpOnly
-  // cookies the route handlers in app/api/auth/ own; this is only what the
-  // dashboard renders. `authStatus` starts 'restoring' so a cold load with a
-  // valid cookie doesn't flash the sign-in page before the session comes back.
   const [authStatus, setAuthStatus] = useState<'restoring' | 'signed-out' | 'signed-in'>('restoring');
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [isDemo, setIsDemo] = useState(false);
 
-  const adoptSession = useCallback((next: AuthSession, demo = false) => {
+  const adoptSession = useCallback((next: AuthSession) => {
     setSession(next);
-    setIsDemo(demo);
     setAuthStatus('signed-in');
-    try {
-      if (demo) sessionStorage.setItem(DEMO_KEY, '1');
-      else sessionStorage.removeItem(DEMO_KEY);
-    } catch {
-      // Private mode — the demo just won't survive a refresh.
-    }
   }, []);
 
-  // Cold-load session restore. The route handler rotates the refresh token
-  // server-side if the 15-minute access token has lapsed, so this is the only
-  // place the client has to think about token lifetime at all.
   useEffect(() => {
     let cancelled = false;
-
-    let demo = false;
-    try {
-      demo = sessionStorage.getItem(DEMO_KEY) === '1';
-    } catch {}
-    if (demo) {
-      // Deferred a tick so the state update lands outside the effect body.
-      queueMicrotask(() => !cancelled && adoptSession(DEMO_SESSION, true));
-      return () => {
-        cancelled = true;
-      };
-    }
 
     fetchSession()
       .then((result) => {
@@ -81,15 +40,9 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      sessionStorage.removeItem(DEMO_KEY);
-    } catch {}
-    // Sign out locally whatever the API says — a revoke that fails must still
-    // leave the browser signed out.
-    try {
-      if (!isDemo) await endSession();
+      await endSession();
     } finally {
       setSession(null);
-      setIsDemo(false);
       setAuthStatus('signed-out');
       history.replaceState(null, '', window.location.pathname);
     }
@@ -104,13 +57,8 @@ export default function App() {
   }
 
   if (authStatus !== 'signed-in' || !session) {
-    return (
-      <AuthView
-        onAuthenticated={(s) => adoptSession(s)}
-        onExploreDemo={() => adoptSession(DEMO_SESSION, true)}
-      />
-    );
+    return <AuthView onAuthenticated={(s) => adoptSession(s)} />;
   }
 
-  return <Console session={session} isDemo={isDemo} onLogout={handleLogout} />;
+  return <Console session={session} onLogout={handleLogout} />;
 }

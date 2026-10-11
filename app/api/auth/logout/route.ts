@@ -7,9 +7,13 @@
  */
 
 import { apiRequest, requireTokens } from '@/app/lib/server/fluxelApi';
+import { dropConsoleKeys } from '@/app/lib/server/consoleKeys';
 import { clearSession } from '@/app/lib/server/session';
 
 export async function POST(): Promise<Response> {
+  // The console's API keys die with the session — while the JWT still works.
+  await dropConsoleKeys().catch((error) => console.warn('[auth] could not revoke console keys', error));
+
   try {
     // Ordered deliberately: `requireTokens` may rotate, and the token handed
     // to the API has to be the surviving one, not the one it just replaced.

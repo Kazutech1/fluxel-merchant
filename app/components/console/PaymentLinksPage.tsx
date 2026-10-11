@@ -1,14 +1,18 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { ExternalLink, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Ban, ExternalLink, Plus } from 'lucide-react';
 
 import QrCode from '../checkout/QrCode';
-import { DAY_MS, formatDate, formatMoney, toNgn } from '../../lib/console/format';
-import { useNow } from '../../lib/console/useNow';
-import type { Currency, PaymentLink } from '../../lib/console/types';
-import { canManage, type PageProps } from './nav';
+import { checkoutUrl } from '../../lib/console/checkoutLink';
+import { invalidate, v1 } from '../../lib/console/client';
+import { useAssets, useCustomers, usePaymentLinks, usePublishableKey } from '../../lib/console/data';
+import { decimalsFor, toMinor } from '../../lib/console/money';
+import type { PaymentLink } from '../../lib/console/models';
+import { can } from '../../lib/permissions';
+import type { PageProps } from './nav';
 import {
+  AsyncButton,
   Button,
   Card,
   CopyButton,
@@ -16,162 +20,180 @@ import {
   DetailList,
   Drawer,
   EmptyState,
+  ErrorState,
   Field,
+  LoadingRows,
   Modal,
   Money,
   PageHeader,
   Pill,
-  Segmented,
-  StatStrip,
-  Switch,
   cx,
   inputClass,
+  selectClass,
   textareaClass,
 } from './ui';
-import { TxnListItem } from './txn';
+import { customerLabel } from './txn';
+import { AmountField, CurrencyPicker, PAY_CURRENCIES, RequestReady, createCryptoRequest, type CreatedRequest, type PayCurrency } from './PaymentRequest';
 
-export const linkUrl = (l: PaymentLink) => `https://pay.fluxel.app/${l.slug}`;
-
-function CreateLinkModal({
-  onClose,
-  onCreate,
-}: {
-  onClose: () => void;
-  onCreate: (input: Pick<PaymentLink, 'title' | 'description' | 'amount' | 'currency'>) => void;
-}) {
+function CreateLinkModal({ props, onClose }: { props: PageProps; onClose: (createdId?: string) => void }) {
+  const { notify, business } = props;
+  const customers = useCustomers();
+  const { data: assets } = useAssets();
+  const active = (customers.data ?? []).filter((c) => c.status === 'active');
+  const [currency, setCurrency] = useState<PayCurrency>('NGN');
+  const [customerId, setCustomerId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [currency, setCurrency] = useState<Currency>('NGN');
-  const [pricing, setPricing] = useState<'fixed' | 'open'>('fixed');
   const [amount, setAmount] = useState('');
-  const [touched, setTouched] = useState(false);
+  const [redirect, setRedirect] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState<CreatedRequest | null>(null);
+  const minor = toMinor(amount, decimalsFor(PAY_CURRENCIES[currency].asset, assets));
+  const chosen = customerId || active[0]?.id || '';
+  const badRedirect = redirect.trim() !== '' && !/^https:\/\//.test(redirect.trim());
 
-  const value = Number(amount) || 0;
-  const error = !title.trim()
-    ? 'Give the link a name.'
-    : pricing === 'fixed' && value < (currency === 'NGN' ? 100 : 1)
-      ? `Enter a price of at least ${formatMoney(currency === 'NGN' ? 100 : 1, currency)}.`
-      : null;
-
-  const submit = () => {
-    setTouched(true);
-    if (error) return;
-    onCreate({ title: title.trim(), description: description.trim(), currency, amount: pricing === 'fixed' ? value : null });
-    onClose();
+  const create = async () => {
+    setError(null);
+    try {
+      if (currency === 'NGN') {
+        const link = await v1.post<PaymentLink>('payment-links', {
+          customer_id: chosen,
+          amount: minor,
+          title: title.trim() || undefined,
+          description: description.trim() || undefined,
+          redirect_url: redirect.trim() || undefined,
+        });
+        invalidate('links');
+        notify('Payment link created');
+        onClose(link.id);
+        return;
+      }
+      // Crypto: the API has no crypto payment links yet, so this is a crypto
+      // deposit intent with the title and redirect carried in the checkout link.
+      const request = await createCryptoRequest(chosen, currency, minor!, {
+        merchant: business.name,
+        customer_name: customerLabel(chosen, customers.data),
+        order_ref: title.trim() || undefined,
+        return_url: redirect.trim() || undefined,
+      });
+      notify(`${PAY_CURRENCIES[currency].label} payment link created`);
+      setReady(request);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create the link.');
+    }
   };
+
+  if (ready) {
+    return (
+      <Modal
+        open
+        onClose={() => onClose()}
+        title={`${PAY_CURRENCIES[ready.currency].label} payment link ready`}
+        description={`Your customer pays to a one-time address on ${PAY_CURRENCIES[ready.currency].network}.`}
+        footer={
+          <Button variant="primary" onClick={() => onClose()}>
+            Done
+          </Button>
+        }
+      >
+        <RequestReady request={ready} />
+      </Modal>
+    );
+  }
 
   return (
     <Modal
       open
-      onClose={onClose}
+      onClose={() => onClose()}
       title="New payment link"
-      description="A page you can share anywhere — WhatsApp, Instagram, email — to get paid."
+      description="A link your customer opens to pay you. Each link is for one customer and one amount."
       footer={
         <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={submit}>
+          <Button onClick={() => onClose()}>Cancel</Button>
+          <AsyncButton variant="primary" disabled={!chosen || !minor || badRedirect} onClick={create}>
             Create link
-          </Button>
+          </AsyncButton>
         </>
       }
     >
-      <div className="space-y-5">
-        <Field label="Name" htmlFor="link-title" error={touched && !title.trim() ? error ?? undefined : undefined}>
-          <input id="link-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ankara fabric bundle" className={inputClass} />
-        </Field>
-        <Field label="Description" htmlFor="link-desc" hint="Optional — shown to the customer above the payment form.">
-          <textarea
-            id="link-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What are they paying for?"
-            className={cx(textareaClass, 'min-h-20')}
-          />
-        </Field>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <p className="text-sm font-medium text-ink-2 mb-2">Currency</p>
-            <Segmented<Currency>
-              label="Currency"
-              value={currency}
-              onChange={setCurrency}
-              className="w-full"
-              options={[
-                { value: 'NGN', label: 'NGN' },
-                { value: 'USDT', label: 'USDT' },
-              ]}
-            />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-ink-2 mb-2">Price</p>
-            <Segmented
-              label="Pricing"
-              value={pricing}
-              onChange={setPricing}
-              className="w-full"
-              options={[
-                { value: 'fixed', label: 'Fixed' },
-                { value: 'open', label: 'Customer decides' },
-              ]}
-            />
-          </div>
+      {customers.loading ? (
+        <p className="text-sm text-ink-3">Loading customers…</p>
+      ) : active.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-line p-5 text-center">
+          <p className="text-sm text-ink">Add a customer first</p>
+          <p className="mt-1 text-sm text-ink-3">Payment links are made for a specific customer.</p>
+          <Button size="sm" className="mt-3" onClick={() => props.onNavigate('customers', 'new')}>
+            Add customer
+          </Button>
         </div>
-        {pricing === 'fixed' && (
-          <Field label="Amount" htmlFor="link-amount" error={touched && title.trim() && error ? error : undefined}>
-            <div className="relative">
-              <input
-                id="link-amount"
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ''))}
-                placeholder="0.00"
-                className={cx(inputClass, '!pr-16 font-mono')}
-              />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-ink-3">{currency}</span>
-            </div>
+      ) : (
+        <div className="space-y-5">
+          <CurrencyPicker
+            value={currency}
+            onChange={(c) => {
+              setCurrency(c);
+              setAmount('');
+            }}
+          />
+          <Field label="Customer" htmlFor="link-customer">
+            <select id="link-customer" value={chosen} onChange={(e) => setCustomerId(e.target.value)} className={selectClass}>
+              {active.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.external_id}
+                </option>
+              ))}
+            </select>
           </Field>
-        )}
-      </div>
+          <AmountField id="link-amount" currency={currency} value={amount} onChange={setAmount} assets={assets} />
+          <Field label="Title" htmlFor="link-title" hint="Optional — shown to the customer.">
+            <input id="link-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ankara fabric bundle" className={inputClass} />
+          </Field>
+          {currency === 'NGN' && (
+            <Field label="Description" htmlFor="link-desc" hint="Optional">
+              <textarea id="link-desc" value={description} onChange={(e) => setDescription(e.target.value)} className={cx(textareaClass, 'min-h-20')} />
+            </Field>
+          )}
+          <Field label="After paying, send them to" htmlFor="link-redirect" hint="Optional — an https:// address." error={badRedirect ? 'Use an https:// address.' : undefined}>
+            <input id="link-redirect" value={redirect} onChange={(e) => setRedirect(e.target.value)} placeholder="https://yourstore.com/thanks" className={inputClass} />
+          </Field>
+          {error && <p role="alert" className="text-sm text-negative">{error}</p>}
+        </div>
+      )}
     </Modal>
   );
 }
 
-export default function PaymentLinksPage({ data, store, role, sub, notify, onNavigate, onOpenTxn }: PageProps) {
-  const [creating, setCreating] = useState(false);
-  const now = useNow();
-  const manage = canManage(role) || role === 'finance';
-  const openId = sub;
+export default function PaymentLinksPage(props: PageProps) {
+  const { role, sub, notify, onNavigate, business } = props;
+  const links = usePaymentLinks();
+  const { data: customers } = useCustomers();
+  const { data: assets } = useAssets();
+  // Only mint a publishable key once there's a live link to share.
+  const meta = usePublishableKey((links.data ?? []).some((l) => !l.voided));
+  const [confirmVoid, setConfirmVoid] = useState<PaymentLink | null>(null);
+  const manage = can(role, 'customers.write');
 
-  const stats = useMemo(() => {
-    const per = new Map<string, { count: number; total: number }>();
-    const since = now - 30 * DAY_MS;
-    let count30 = 0;
-    let total30 = 0;
-    for (const t of data.transactions) {
-      if (!t.linkId || t.status !== 'successful') continue;
-      const s = per.get(t.linkId) ?? { count: 0, total: 0 };
-      s.count++;
-      s.total += t.amount;
-      per.set(t.linkId, s);
-      if (t.createdAt >= since) {
-        count30++;
-        total30 += toNgn(t.amount, t.currency);
-      }
-    }
-    return { per, count30, total30 };
-  }, [data.transactions, now]);
+  const url = (l: PaymentLink) =>
+    meta.data
+      ? checkoutUrl(l.deposit_intent_id, {
+          pk: meta.data,
+          merchant: business.name,
+          customer_name: customerLabel(l.customer_id, customers),
+          order_ref: l.title ?? undefined,
+          return_url: l.redirect_url ?? undefined,
+        })
+      : '';
 
-  const open = openId ? data.links.find((l) => l.id === openId) ?? null : null;
-  const openPayments = open ? data.transactions.filter((t) => t.linkId === open.id).slice(0, 20) : [];
+  const open = sub && sub !== 'new' ? links.data?.find((l) => l.id === sub) ?? null : null;
 
   return (
     <>
       <PageHeader
         title="Payment links"
-        description="Shareable pages that collect payments — no website needed."
+        description="Send a link, get paid by bank transfer. No website needed."
         actions={
           manage && (
-            <Button variant="primary" onClick={() => setCreating(true)}>
+            <Button variant="primary" onClick={() => onNavigate('links', 'new')}>
               <Plus className="size-4" />
               New link
             </Button>
@@ -179,60 +201,28 @@ export default function PaymentLinksPage({ data, store, role, sub, notify, onNav
         }
       />
 
-      <StatStrip
-        items={[
-          { label: 'Active links', value: data.links.filter((l) => l.active).length },
-          { label: 'Collected via links · 30 days', value: formatMoney(stats.total30, 'NGN', { compact: true }), hint: 'USDT counted in naira' },
-          { label: 'Payments via links · 30 days', value: stats.count30.toLocaleString() },
-        ]}
-      />
-
       <Card className="overflow-hidden">
-        {data.links.length === 0 ? (
-          <EmptyState title="No payment links yet" description="Create one to start collecting." />
+        {links.loading ? (
+          <LoadingRows rows={5} />
+        ) : links.error ? (
+          <ErrorState message={links.error.message} onRetry={links.reload} />
+        ) : (links.data ?? []).length === 0 ? (
+          <EmptyState title="No payment links yet" description="Create one and share it on WhatsApp, Instagram or email." />
         ) : (
           <ul className="divide-y divide-line">
-            {data.links.map((l) => {
-              const s = stats.per.get(l.id) ?? { count: 0, total: 0 };
-              return (
-                <li key={l.id} className="flex items-center gap-4 px-5 py-4">
-                  <button
-                    type="button"
-                    onClick={() => onNavigate('links', l.id)}
-                    className="min-w-0 flex-1 text-left cursor-pointer group"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-ink truncate group-hover:underline underline-offset-4">{l.title}</span>
-                      {!l.active && <Pill tone="neutral">Off</Pill>}
-                    </span>
-                    <span className="block text-xs text-ink-3 font-mono truncate">pay.fluxel.app/{l.slug}</span>
-                  </button>
-                  <div className="hidden md:block w-36 text-right">
-                    {l.amount === null ? (
-                      <span className="text-sm text-ink-2">Customer decides</span>
-                    ) : (
-                      <Money amount={l.amount} currency={l.currency} className="text-sm text-ink" />
-                    )}
-                    <span className="block text-xs text-ink-3">{l.currency}</span>
-                  </div>
-                  <div className="hidden sm:block w-36 text-right">
-                    <Money amount={s.total} currency={l.currency} compact className="text-sm text-ink" />
-                    <span className="block text-xs text-ink-3">{s.count} payments</span>
-                  </div>
-                  <CopyButton value={linkUrl(l)} label="Copy link" />
-                  {manage && (
-                    <Switch
-                      checked={l.active}
-                      label={`${l.title} accepting payments`}
-                      onChange={(on) => {
-                        store.setLinkActive(l.id, on);
-                        notify(`${l.title} ${on ? 'is live' : 'turned off'}`);
-                      }}
-                    />
-                  )}
-                </li>
-              );
-            })}
+            {links.data!.map((l) => (
+              <li key={l.id} className="flex items-center gap-4 px-5 py-4">
+                <button type="button" onClick={() => onNavigate('links', l.id)} className="min-w-0 flex-1 text-left cursor-pointer group">
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-ink truncate group-hover:underline underline-offset-4">{l.title || 'Payment link'}</span>
+                    {l.voided && <Pill tone="neutral">Voided</Pill>}
+                  </span>
+                  <span className="block text-xs text-ink-3 truncate">For {customerLabel(l.customer_id, customers)}</span>
+                </button>
+                <Money minor={l.amount} asset={l.asset_code} assets={assets} className="text-sm font-medium text-ink" />
+                {!l.voided && meta.data && <CopyButton value={url(l)} label="Copy link" />}
+              </li>
+            ))}
           </ul>
         )}
       </Card>
@@ -242,74 +232,88 @@ export default function PaymentLinksPage({ data, store, role, sub, notify, onNav
           <>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-lg font-semibold tracking-tight text-ink">{open.title}</p>
+                <p className="text-lg font-semibold tracking-tight text-ink">{open.title || 'Payment link'}</p>
                 {open.description && <p className="mt-1 text-sm text-ink-2">{open.description}</p>}
               </div>
-              <Pill tone={open.active ? 'positive' : 'neutral'}>{open.active ? 'Live' : 'Off'}</Pill>
+              <Pill tone={open.voided ? 'neutral' : 'positive'}>{open.voided ? 'Voided' : 'Live'}</Pill>
             </div>
+            <Money minor={open.amount} asset={open.asset_code} assets={assets} className="mt-4 block text-3xl font-semibold text-ink" />
 
-            <div className="mt-6">
-              <CopyField value={linkUrl(open)} />
-            </div>
-
-            <div className="mt-6 flex items-center gap-5">
-              <QrCode value={linkUrl(open)} className="size-32 border border-line" />
-              <p className="text-sm text-ink-2">
-                Print this on receipts or packaging — customers scan it to pay.
-              </p>
-            </div>
+            {!open.voided &&
+              (meta.data ? (
+                <>
+                  <div className="mt-6">
+                    <CopyField value={url(open)} />
+                  </div>
+                  <div className="mt-6 flex items-center gap-5">
+                    <QrCode value={url(open)} className="size-32 border border-line" />
+                    <p className="text-sm text-ink-2">Print it on receipts or packaging — customers scan to pay.</p>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-6 text-sm text-negative">{meta.error?.message ?? 'Preparing your link…'}</p>
+              ))}
 
             <div className="mt-6">
               <DetailList
                 items={[
-                  { term: 'Price', detail: open.amount === null ? 'Customer decides' : <Money amount={open.amount} currency={open.currency} /> },
-                  { term: 'Collected', detail: <Money amount={stats.per.get(open.id)?.total ?? 0} currency={open.currency} /> },
-                  { term: 'Payments', detail: stats.per.get(open.id)?.count ?? 0 },
-                  { term: 'Created', detail: formatDate(open.createdAt) },
+                  { term: 'Customer', detail: customerLabel(open.customer_id, customers) },
+                  { term: 'Link ID', detail: <span className="font-mono text-[13px] break-all">{open.id}</span> },
+                  { term: 'Payment request', detail: <span className="font-mono text-[13px] break-all">{open.deposit_intent_id}</span> },
+                  { term: 'Redirect', detail: open.redirect_url ?? '—' },
                 ]}
               />
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              <Button onClick={() => window.open(linkUrl(open), '_blank', 'noopener')} title="Opens the hosted page (not live in the demo)">
-                <ExternalLink className="size-4" />
-                Open page
-              </Button>
-              {manage && (
-                <Button
-                  onClick={() => {
-                    store.setLinkActive(open.id, !open.active);
-                    notify(`${open.title} ${open.active ? 'turned off' : 'is live'}`);
-                  }}
-                >
-                  {open.active ? 'Turn off' : 'Turn on'}
+              {!open.voided && meta.data && (
+                <Button onClick={() => window.open(url(open), '_blank', 'noopener')}>
+                  <ExternalLink className="size-4" />
+                  Open checkout
+                </Button>
+              )}
+              {!open.voided && manage && (
+                <Button variant="danger" onClick={() => setConfirmVoid(open)}>
+                  <Ban className="size-4" />
+                  Void link
                 </Button>
               )}
             </div>
-
-            <h3 className="mt-8 mb-2 text-sm font-semibold text-ink">Recent payments</h3>
-            {openPayments.length === 0 ? (
-              <p className="text-sm text-ink-3">No payments yet — share the link to get started.</p>
-            ) : (
-              <ul className="-mx-6 border-y border-line divide-y divide-line">
-                {openPayments.map((t) => (
-                  <TxnListItem key={t.id} txn={t} data={data} onOpen={onOpenTxn} />
-                ))}
-              </ul>
-            )}
           </>
         )}
       </Drawer>
 
-      {creating && (
-        <CreateLinkModal
-          onClose={() => setCreating(false)}
-          onCreate={(input) => {
-            const link = store.createLink(input);
-            notify(`Link created — ${link.title}`);
-            onNavigate('links', link.id);
-          }}
-        />
+      {sub === 'new' && <CreateLinkModal props={props} onClose={(id) => onNavigate('links', id)} />}
+
+      {confirmVoid && (
+        <Modal
+          open
+          onClose={() => setConfirmVoid(null)}
+          title="Void this link?"
+          description="The customer won’t be able to pay with it any more. This can’t be undone."
+          footer={
+            <>
+              <Button onClick={() => setConfirmVoid(null)}>Keep it</Button>
+              <AsyncButton
+                variant="danger"
+                onClick={async () => {
+                  try {
+                    await v1.post(`payment-links/${confirmVoid.id}/void`);
+                    invalidate(`links`);
+                    notify('Link voided');
+                    setConfirmVoid(null);
+                  } catch (e) {
+                    notify(e instanceof Error ? e.message : 'Could not void the link', 'error');
+                  }
+                }}
+              >
+                Void link
+              </AsyncButton>
+            </>
+          }
+        >
+          {null}
+        </Modal>
       )}
     </>
   );

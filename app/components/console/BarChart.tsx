@@ -2,8 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-import { formatDate, formatMoney, formatShortDate } from '../../lib/console/format';
-import type { Currency } from '../../lib/console/types';
+import { formatDate, formatShortDate } from '../../lib/console/format';
+import { formatMajor } from '../../lib/console/money';
 
 const HEIGHT = 220;
 const PAD = { top: 12, right: 8, bottom: 26, left: 52 };
@@ -24,7 +24,7 @@ export default function BarChart({
   label,
 }: {
   points: { t: number; v: number; count: number }[];
-  currency: Currency;
+  currency: string;
   label: string;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
@@ -87,7 +87,7 @@ export default function BarChart({
             <g key={v}>
               <line x1={PAD.left} x2={width - PAD.right} y1={geo.y(v)} y2={geo.y(v)} stroke="var(--color-line)" strokeDasharray={v ? '2 4' : undefined} />
               <text x={PAD.left - 10} y={geo.y(v)} dy="0.32em" textAnchor="end" className="fill-ink-3 font-mono text-[11px]">
-                {formatMoney(v, currency, { compact: true }).replace(' USDT', '')}
+                {formatMajor(v, currency, { compact: true }).replace(/ [A-Z]+$/, '')}
               </text>
             </g>
           ))}
@@ -120,8 +120,8 @@ export default function BarChart({
           style={{ left: Math.min(Math.max(PAD.left + active * geo.slot - 80, 0), width - 170), width: 170 }}
         >
           <p className="text-[11px] text-ink-3">{formatDate(p.t)}</p>
-          <p className="mt-0.5 text-sm font-medium tabular-nums text-ink">{formatMoney(p.v, currency)}</p>
-          <p className="text-[11px] text-ink-3">{p.count} payments</p>
+          <p className="mt-0.5 text-sm font-medium tabular-nums text-ink">{formatMajor(p.v, currency)}</p>
+          <p className="text-[11px] text-ink-3">{p.count} {p.count === 1 ? 'deposit' : 'deposits'}</p>
         </div>
       )}
     </div>

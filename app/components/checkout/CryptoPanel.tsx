@@ -1,29 +1,38 @@
-'use client';
+"use client";
 
-import React from 'react';
-import { CircleCheck, Coins, QrCode as QrCodeIcon, TriangleAlert, Wallet } from 'lucide-react';
-import { PaymentSession, RAILS, formatQuote } from '../../lib/paymentSessions';
-import DetailField from './DetailField';
-import QrCode from './QrCode';
-import Step from './Step';
-import WaitingIndicator from './WaitingIndicator';
+import React from "react";
+import {
+  CircleCheck,
+  Coins,
+  QrCode as QrCodeIcon,
+  TriangleAlert,
+  Wallet,
+} from "lucide-react";
+import { PaymentSession, RAILS, formatQuote } from "../../lib/paymentSessions";
+import DetailField from "./DetailField";
+import QrCode from "./QrCode";
+import Step from "./Step";
+import WaitingIndicator from "./WaitingIndicator";
 
 interface CryptoPanelProps {
   session: PaymentSession;
   onRequestAddress: () => void;
 }
 
-const ICON = 'w-3.5 h-3.5';
+const ICON = "w-3.5 h-3.5";
 
-export default function CryptoPanel({ session, onRequestAddress }: CryptoPanelProps) {
+export default function CryptoPanel({
+  session,
+  onRequestAddress,
+}: CryptoPanelProps) {
   const asset = session.asset_code;
   const rail = RAILS[asset];
   const address = session.deposit_address;
   const amount = formatQuote(session.expected_amount, asset);
 
-  const confirming = session.status === 'confirming';
+  const confirming = session.status === "confirming";
   const confirmations = session.confirmations ?? 0;
-  const required = rail.confirmationsRequired;
+  const required = session.confirmations_required ?? rail.confirmationsRequired;
   const progress = Math.min((confirmations / Math.max(required, 1)) * 100, 100);
 
   return (
@@ -39,17 +48,26 @@ export default function CryptoPanel({ session, onRequestAddress }: CryptoPanelPr
               icon={<QrCodeIcon className="w-4 h-4" />}
               title={`Get a ${asset} address for this payment.`}
             >
-              <button
-                type="button"
-                onClick={onRequestAddress}
-                className="w-full h-12 rounded-lg bg-slate-900 dark:bg-[#fed700] text-white dark:text-slate-950 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-[#ffe23d] active:scale-[0.99] transition cursor-pointer"
-              >
-                Show deposit address
-              </button>
-              <p className="mt-2.5 text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
-                The address belongs to this invoice alone, so we can match your deposit without a
-                memo or reference.
-              </p>
+              {session.live ? (
+                <WaitingIndicator
+                  label="Generating your deposit address"
+                  sublabel="This takes a few seconds"
+                />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={onRequestAddress}
+                    className="w-full h-12 rounded-lg bg-slate-900 dark:bg-[#fed700] text-white dark:text-slate-950 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-[#ffe23d] active:scale-[0.99] transition cursor-pointer"
+                  >
+                    Show deposit address
+                  </button>
+                  <p className="mt-2.5 text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                    The address belongs to this invoice alone, so we can match
+                    your deposit without a memo or reference.
+                  </p>
+                </>
+              )}
             </Step>
 
             <Step
@@ -71,7 +89,7 @@ export default function CryptoPanel({ session, onRequestAddress }: CryptoPanelPr
               <div className="space-y-2">
                 <DetailField
                   label="Amount"
-                  value={amount.replace(/,/g, '')}
+                  value={amount.replace(/,/g, "")}
                   display={
                     <span className="font-semibold">
                       {amount} {asset}
@@ -92,8 +110,8 @@ export default function CryptoPanel({ session, onRequestAddress }: CryptoPanelPr
               <div className="mt-3 flex gap-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 p-3">
                 <TriangleAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-px" />
                 <p className="text-xs text-amber-800 dark:text-amber-200/90 leading-relaxed">
-                  Send only {asset} on {rail.network}. Funds sent on another network cannot be
-                  recovered.
+                  Send only {asset} on {rail.network}. Funds sent on another
+                  network cannot be recovered.
                 </p>
               </div>
             </Step>

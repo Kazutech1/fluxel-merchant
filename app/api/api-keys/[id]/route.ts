@@ -8,11 +8,14 @@
 
 import { dashboardRequest } from '@/app/lib/server/fluxelApi';
 import { errorResponse } from '@/app/lib/server/dashboardSession';
+import { requirePermission } from '@/app/lib/server/authorize';
 
 export async function DELETE(
   _request: Request,
   context: { params: Promise<{ id: string }> }
 ): Promise<Response> {
+  const denied = await requirePermission('keys.manage');
+  if (denied) return denied;
   const { id } = await context.params;
 
   try {

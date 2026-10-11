@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Inter_Tight, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -24,10 +24,26 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
 });
 
+const DESCRIPTION =
+  "Collect naira and stablecoin payments, pay out to any Nigerian bank, and reconcile it all in one place.";
+
+// Icons come from the file conventions in app/: favicon.ico (16/32/48),
+// icon.png (512) and apple-icon.png (180), all cut from the Fluxel mark.
 export const metadata: Metadata = {
-  title: "Fluxel — Merchant Console",
-  description:
-    "Unified NGN and stablecoin settlement for merchants: collections, payouts, and reconciliation.",
+  title: { default: "Fluxel — Merchant Console", template: "%s · Fluxel" },
+  description: DESCRIPTION,
+  applicationName: "Fluxel",
+  appleWebApp: { title: "Fluxel", statusBarStyle: "black-translucent" },
+  openGraph: { title: "Fluxel — Merchant Console", description: DESCRIPTION, siteName: "Fluxel", type: "website" },
+  // A signed-in console and one-off checkout links have nothing to index.
+  robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0b" },
+  ],
 };
 
 /**

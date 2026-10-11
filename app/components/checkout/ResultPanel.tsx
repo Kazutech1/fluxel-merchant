@@ -10,7 +10,8 @@ import CopyField from './CopyField';
 
 interface ResultPanelProps {
   session: PaymentSession;
-  onRestart: () => void;
+  /** Demo only. Without it, an expired request offers the way back to the merchant. */
+  onRestart?: () => void;
 }
 
 /** How long the payer gets to read the receipt before being sent back. */
@@ -78,16 +79,17 @@ export default function ResultPanel({ session, onRestart }: ResultPanelProps) {
         </span>
         <h2 className="mt-4 text-lg font-semibold tracking-tight">This request expired</h2>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-          The account was only valid for 30 minutes. Nothing was charged — start again to get a
-          fresh one.
+          {onRestart
+            ? 'The account was only valid for 30 minutes. Nothing was charged — start again to get a fresh one.'
+            : `Nothing was received before the time ran out. Head back to ${session.merchant_name} to start a new payment.`}
         </p>
 
         <button
           type="button"
-          onClick={onRestart}
+          onClick={onRestart ?? leave}
           className="mt-6 w-full sm:w-auto sm:px-6 h-12 rounded-lg bg-slate-900 dark:bg-[#fed700] text-white dark:text-slate-950 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-[#ffe23d] active:scale-[0.99] transition cursor-pointer"
         >
-          Start a new payment
+          {onRestart ? 'Start a new payment' : `Return to ${session.merchant_name}`}
         </button>
       </div>
     );

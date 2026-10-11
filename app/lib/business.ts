@@ -72,3 +72,10 @@ export function fetchApiKeys(): Promise<ApiKeySummary[]> {
 export function revokeApiKey(id: string): Promise<void> {
   return call<void>(`/api/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+export function setKeyIpAllowlist(id: string, cidrs: string[]): Promise<{ id: string; ip_allowlist: string[] }> {
+  return call<{ id: string; ip_allowlist: string[] }>(`/api/api-keys/${encodeURIComponent(id)}/ip-allowlist`, {
+    method: 'PUT',
+    body: JSON.stringify({ cidrs }),
+  });
+}

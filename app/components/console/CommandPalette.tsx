@@ -3,9 +3,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CornerDownLeft, Search } from 'lucide-react';
 
-import { formatMoney } from '../../lib/console/format';
-import type { ConsoleData } from '../../lib/console/types';
-import type { Page } from './nav';
+import { useAssets, useCustomers, usePaymentLinks, useTransactions } from '../../lib/console/data';
+import { formatMinor } from '../../lib/console/money';
+import type { Txn } from '../../lib/console/models';
+import { can } from '../../lib/permissions';
+import { PAGE_LABELS, PAGES, type Page } from './nav';
 import { cx } from './ui';
 import { txnTitle } from './txn';
 
@@ -17,50 +19,39 @@ interface Item {
   run: () => void;
 }
 
-/** Pages offered in search. Invoices and subscriptions still exist but are hidden for now. */
-export const PAGE_LABELS: Partial<Record<Page, string>> = {
-  overview: 'Overview',
-  transactions: 'Transactions',
-  customers: 'Customers',
-  links: 'Payment links',
-  refunds: 'Refunds',
-  disputes: 'Disputes',
-  reports: 'Reports',
-  developers: 'Developers',
-  settings: 'Settings',
-};
-
-const SHORTCUTS: [Page, string | undefined, string][] = [
-  ['settings', 'payouts', 'Settings · Payouts & withdrawal accounts'],
-  ['settings', 'team', 'Settings · Team'],
+const SHORTCUTS: [Page, string, string][] = [
+  ['settings', 'payouts', 'Settings · Bank accounts & settlement'],
+  ['settings', 'verification', 'Settings · Verification (KYB)'],
   ['settings', 'checkout', 'Settings · Checkout'],
+  ['settings', 'team', 'Settings · Team'],
   ['settings', 'security', 'Settings · Security'],
-  ['settings', 'verification', 'Settings · Verification'],
-  ['settings', 'activity', 'Settings · Activity log'],
-  ['developers', undefined, 'Developers · API keys'],
   ['developers', 'webhooks', 'Developers · Webhooks'],
 ];
 
-/** ⌘K: jump to any page, customer, payment, invoice or link. */
+/** ⌘K: jump to any page, customer, transaction or payment link. */
 export default function CommandPalette({
   open,
+  role,
   onClose,
-  data,
   onNavigate,
   onOpenTxn,
   onWithdraw,
 }: {
   open: boolean;
+  role: string;
   onClose: () => void;
-  data: ConsoleData;
   onNavigate: (page: Page, sub?: string) => void;
-  onOpenTxn: (id: string) => void;
+  onOpenTxn: (txn: Txn) => void;
   onWithdraw: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
+  const { data: customers } = useCustomers();
+  const { data: txns } = useTransactions();
+  const { data: links } = usePaymentLinks();
+  const { data: assets } = useAssets();
 
   useEffect(() => {
     if (open) window.setTimeout(() => input.current?.focus(), 0);
@@ -68,62 +59,49 @@ export default function CommandPalette({
 
   const items = useMemo<Item[]>(() => {
     const q = query.trim().toLowerCase();
-    const match = (...fields: string[]) => !q || fields.some((f) => f.toLowerCase().includes(q));
+    const match = (...fields: (string | null | undefined)[]) => !q || fields.some((f) => f?.toLowerCase().includes(q));
     const out: Item[] = [];
 
-    out.push(
-      ...[
-        { id: 'act-withdraw', group: 'Actions', label: 'Withdraw money', run: onWithdraw },
-        { id: 'act-link', group: 'Actions', label: 'Create a payment link', run: () => onNavigate('links') },
-        { id: 'act-refund', group: 'Actions', label: 'Refund a payment', run: () => onNavigate('refunds') },
-      ].filter((i) => match(i.label))
-    );
+    const actions: Item[] = [];
+    if (can(role, 'payouts.write')) actions.push({ id: 'a-withdraw', group: 'Actions', label: 'Withdraw to bank', run: onWithdraw });
+    if (can(role, 'customers.write')) {
+      actions.push({ id: 'a-link', group: 'Actions', label: 'Create a payment link', run: () => onNavigate('links', 'new') });
+      actions.push({ id: 'a-customer', group: 'Actions', label: 'Add a customer', run: () => onNavigate('customers', 'new') });
+    }
+    out.push(...actions.filter((a) => match(a.label)));
 
-    out.push(
-      ...(Object.keys(PAGE_LABELS) as Page[])
-        .filter((p) => match(PAGE_LABELS[p]!))
-        .map((p) => ({ id: `page-${p}`, group: 'Go to', label: PAGE_LABELS[p]!, run: () => onNavigate(p) }))
-    );
-    out.push(
-      ...SHORTCUTS.filter(([, , label]) => q && match(label)).map(([p, sub, label]) => ({
-        id: `short-${label}`,
-        group: 'Go to',
-        label,
-        run: () => onNavigate(p, sub),
-      }))
-    );
-
+    out.push(...PAGES.filter((p) => match(PAGE_LABELS[p])).map((p) => ({ id: `p-${p}`, group: 'Go to', label: PAGE_LABELS[p], run: () => onNavigate(p) })));
     if (q) {
+      out.push(...SHORTCUTS.filter(([, , l]) => match(l)).map(([p, s, l]) => ({ id: `s-${l}`, group: 'Go to', label: l, run: () => onNavigate(p, s) })));
       out.push(
-        ...data.customers
-          .filter((c) => match(c.name, c.email))
+        ...(customers ?? [])
+          .filter((c) => match(c.external_id, c.id))
           .slice(0, 5)
-          .map((c) => ({ id: c.id, group: 'Customers', label: c.name, hint: c.email, run: () => onNavigate('customers', c.id) }))
+          .map((c) => ({ id: c.id, group: 'Customers', label: c.external_id, hint: c.id, run: () => onNavigate('customers', c.id) }))
       );
       out.push(
-        ...data.transactions
-          .filter((t) => match(t.reference, txnTitle(t, data)))
+        ...(txns ?? [])
+          .filter((t) => match(t.id, t.provider_ref, t.txid, txnTitle(t, customers)))
           .slice(0, 5)
           .map((t) => ({
-            id: t.id,
+            id: `t-${t.direction}-${t.id}`,
             group: 'Transactions',
-            label: `${txnTitle(t, data)}`,
-            hint: `${t.reference} · ${formatMoney(t.kind === 'payment' ? t.amount : -t.amount, t.currency, { sign: true })}`,
-            run: () => onOpenTxn(t.id),
+            label: txnTitle(t, customers),
+            hint: formatMinor(t.amount, t.asset_code, assets, { sign: t.direction !== 'transfer', negative: t.direction === 'out' }),
+            run: () => onOpenTxn(t),
           }))
       );
       out.push(
-        ...data.links
-          .filter((l) => match(l.title, l.slug))
+        ...(links ?? [])
+          .filter((l) => match(l.title, l.id, l.description))
           .slice(0, 4)
-          .map((l) => ({ id: l.id, group: 'Payment links', label: l.title, hint: `pay.fluxel.app/${l.slug}`, run: () => onNavigate('links', l.id) }))
+          .map((l) => ({ id: l.id, group: 'Payment links', label: l.title || 'Payment link', hint: formatMinor(l.amount, l.asset_code, assets), run: () => onNavigate('links', l.id) }))
       );
     }
     return out;
-  }, [query, data, onNavigate, onOpenTxn, onWithdraw]);
+  }, [query, role, customers, txns, links, assets, onNavigate, onOpenTxn, onWithdraw]);
 
   const active = Math.min(index, Math.max(0, items.length - 1));
-
   useEffect(() => {
     list.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [active]);
@@ -136,7 +114,6 @@ export default function CommandPalette({
     setQuery('');
     item.run();
   };
-
   let lastGroup = '';
 
   return (
@@ -165,7 +142,7 @@ export default function CommandPalette({
                 choose(items[active]);
               }
             }}
-            placeholder="Search customers, payments, invoices, pages…"
+            placeholder="Search customers, transactions, links, pages…"
             aria-label="Search"
             className="flex-1 bg-transparent outline-none text-base sm:text-sm text-ink placeholder:text-ink-3"
           />
@@ -185,10 +162,7 @@ export default function CommandPalette({
                   data-index={i}
                   onMouseMove={() => setIndex(i)}
                   onClick={() => choose(item)}
-                  className={cx(
-                    'mx-2 flex items-center gap-3 h-10 px-3 rounded-lg cursor-pointer text-sm',
-                    i === active ? 'bg-gold-soft text-ink' : 'text-ink-2'
-                  )}
+                  className={cx('mx-2 flex items-center gap-3 h-10 px-3 rounded-lg cursor-pointer text-sm', i === active ? 'bg-gold-soft text-ink' : 'text-ink-2')}
                 >
                   <span className="min-w-0 flex-1 truncate">
                     <span className={i === active ? 'font-medium' : ''}>{item.label}</span>

@@ -3,124 +3,103 @@
 import React, { useMemo, useState } from 'react';
 import { Download, FileText } from 'lucide-react';
 
-import { DAY_MS, formatDateTime, formatMoney, startOfDay, toNgn } from '../../lib/console/format';
+import { useAssets, useCustomers, useSettlementSummary, useTransactions } from '../../lib/console/data';
+import { DAY_MS, formatDateTime, startOfDay } from '../../lib/console/format';
+import { decimalsFor, toMajor } from '../../lib/console/money';
+import type { AssetTotal } from '../../lib/console/models';
 import { useNow } from '../../lib/console/useNow';
-import type { Transaction } from '../../lib/console/types';
 import BarChart from './BarChart';
-import { downloadCsv, type PageProps } from './nav';
-import { Button, Card, CardHeader, PageHeader, Segmented, StatStrip } from './ui';
+import CurrencyIcon from './CurrencyIcon';
+import { DIRECTION_LABEL, downloadCsv, type PageProps } from './nav';
+import { Button, Card, CardHeader, EmptyState, ErrorState, LoadingRows, Money, PageHeader, Segmented, Skeleton } from './ui';
 import { txnTitle } from './txn';
 
 type Range = '7' | '30' | '90';
 
-const sourceOf = (t: Transaction) =>
-  t.linkId ? 'Payment links' : t.invoiceId ? 'Invoices' : t.subscriptionId ? 'Subscriptions' : 'Checkout & API';
-
-/** A ranked list of shares — one colour, labelled, so no legend is needed. */
-function BarList({ rows }: { rows: { label: string; value: number; count: number }[] }) {
-  const max = Math.max(...rows.map((r) => r.value), 1);
-  const total = rows.reduce((s, r) => s + r.value, 0) || 1;
+function Totals({ title, rows, assets, negative }: { title: string; rows: AssetTotal[]; assets?: Parameters<typeof decimalsFor>[1]; negative?: boolean }) {
   return (
-    <ul className="space-y-4 px-5 pb-5">
-      {rows.map((r) => (
-        <li key={r.label}>
-          <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="text-ink">{r.label}</span>
-            <span className="tabular-nums text-ink">
-              {formatMoney(r.value, 'NGN', { compact: true })}
-              <span className="ml-2 text-xs text-ink-3">{Math.round((r.value / total) * 100)}%</span>
-            </span>
-          </div>
-          <div className="mt-1.5 h-2 rounded-full bg-subtle overflow-hidden">
-            <div className="h-full rounded-full bg-chart" style={{ width: `${(r.value / max) * 100}%` }} />
-          </div>
-          <p className="mt-1 text-xs text-ink-3">{r.count.toLocaleString()} payments</p>
-        </li>
-      ))}
-    </ul>
+    <Card className="overflow-hidden">
+      <CardHeader title={title} />
+      <div className="border-t border-line">
+        {rows.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-ink-3">None in this period.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {rows.map((r) => (
+              <li key={r.asset_code} className="flex items-center gap-3 px-5 py-3">
+                <CurrencyIcon asset={r.asset_code} className="size-7" />
+                <span className="flex-1 text-sm text-ink">{r.asset_code}</span>
+                <Money minor={r.total} asset={r.asset_code} assets={assets} negative={negative} className="text-sm font-medium text-ink" />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
   );
 }
 
-export default function ReportsPage({ data, notify }: PageProps) {
+export default function ReportsPage({ notify }: PageProps) {
   const [range, setRange] = useState<Range>('30');
-  const now = useNow();
+  const now = useNow(5 * 60_000);
+  const days = Number(range);
+  const start = startOfDay(now) - (days - 1) * DAY_MS;
+  const from = useMemo(() => new Date(start).toISOString(), [start]);
+  const to = useMemo(() => new Date(startOfDay(now) + DAY_MS).toISOString(), [now]);
 
-  const report = useMemo(() => {
-    const days = Number(range);
-    const from = startOfDay(now) - (days - 1) * DAY_MS;
-    const payments = data.transactions.filter((t) => t.kind === 'payment' && t.createdAt >= from);
-    const ok = payments.filter((t) => t.status === 'successful');
-    const failed = payments.filter((t) => t.status === 'failed');
-    const gross = ok.reduce((s, t) => s + toNgn(t.amount, t.currency), 0);
-    const fees = ok.reduce((s, t) => s + toNgn(t.fee, t.currency), 0);
-    const refunded = data.refunds
-      .filter((r) => r.createdAt >= from && r.status !== 'failed')
-      .reduce((s, r) => s + toNgn(r.amount, r.currency), 0);
+  const summary = useSettlementSummary(from, to);
+  const txns = useTransactions();
+  const { data: assets } = useAssets();
+  const { data: customers } = useCustomers();
+  const ngnDecimals = decimalsFor('NGN', assets);
 
-    const daily = Array.from({ length: days }, (_, i) => ({ t: from + i * DAY_MS, v: 0, count: 0 }));
-    for (const t of ok) {
-      const i = Math.floor((startOfDay(t.createdAt) - from) / DAY_MS);
-      if (daily[i]) {
-        daily[i].v += toNgn(t.amount, t.currency);
-        daily[i].count++;
+  const daily = useMemo(() => {
+    const out = Array.from({ length: days }, (_, i) => ({ t: start + i * DAY_MS, v: 0, count: 0 }));
+    for (const t of txns.data ?? []) {
+      if (t.direction !== 'in' || t.asset_code !== 'NGN' || t.status === 'failed') continue;
+      const i = Math.floor((startOfDay(Date.parse(t.created_at ?? '')) - start) / DAY_MS);
+      if (out[i]) {
+        out[i].v += toMajor(t.amount, ngnDecimals);
+        out[i].count++;
       }
     }
+    return out;
+  }, [txns.data, days, start, ngnDecimals]);
 
-    const group = (key: (t: Transaction) => string) => {
-      const m = new Map<string, { value: number; count: number }>();
-      for (const t of ok) {
-        const k = key(t);
-        const g = m.get(k) ?? { value: 0, count: 0 };
-        g.value += toNgn(t.amount, t.currency);
-        g.count++;
-        m.set(k, g);
-      }
-      return [...m.entries()].map(([label, g]) => ({ label, ...g })).sort((a, b) => b.value - a.value);
-    };
-
-    return {
-      gross,
-      net: gross - fees - refunded,
-      fees,
-      refunded,
-      count: ok.length,
-      average: ok.length ? gross / ok.length : 0,
-      successRate: ok.length + failed.length ? (ok.length / (ok.length + failed.length)) * 100 : 100,
-      daily,
-      byChannel: group((t) => (t.currency === 'NGN' ? 'Bank transfer (NGN)' : t.method.replace('·', '—'))),
-      bySource: group(sourceOf),
-    };
-  }, [data.transactions, data.refunds, range, now]);
-
-  // Last three calendar months, each downloadable as a statement.
   const months = useMemo(() => {
     const d = new Date(now);
     return Array.from({ length: 3 }, (_, i) => {
-      const startM = new Date(d.getFullYear(), d.getMonth() - i, 1).getTime();
-      const endM = new Date(d.getFullYear(), d.getMonth() - i + 1, 1).getTime();
-      const txns = data.transactions.filter((t) => t.createdAt >= startM && t.createdAt < endM && t.status !== 'failed');
-      const label = new Date(startM).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-      return { label, startM, txns, partial: i === 0 };
+      const s = new Date(d.getFullYear(), d.getMonth() - i, 1).getTime();
+      const e = new Date(d.getFullYear(), d.getMonth() - i + 1, 1).getTime();
+      const rows = (txns.data ?? []).filter((t) => {
+        const ms = Date.parse(t.created_at ?? '');
+        return ms >= s && ms < e;
+      });
+      return { label: new Date(s).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }), rows, partial: i === 0 };
     });
-  }, [data.transactions, now]);
+  }, [txns.data, now]);
 
   const statement = (m: (typeof months)[number]) => {
     downloadCsv(`fluxel-statement-${m.label.toLowerCase().replace(' ', '-')}.csv`, [
-      ['Date', 'Reference', 'Type', 'Description', 'Currency', 'Amount', 'Fee', 'Net', 'Status'],
-      ...m.txns
+      ['Date', 'ID', 'Type', 'Description', 'Asset', 'Amount', 'Fee', 'Status', 'Bank reference', 'Blockchain hash'],
+      ...m.rows
         .slice()
         .reverse()
-        .map((t) => [
-          formatDateTime(t.createdAt),
-          t.reference,
-          t.kind,
-          txnTitle(t, data),
-          t.currency,
-          (t.kind === 'payment' ? t.amount : -t.amount).toFixed(2),
-          t.fee.toFixed(2),
-          (t.kind === 'payment' ? t.amount - t.fee : -(t.amount + t.fee)).toFixed(2),
-          t.status,
-        ]),
+        .map((t) => {
+          const d = decimalsFor(t.asset_code, assets);
+          return [
+            formatDateTime(t.created_at),
+            t.id,
+            DIRECTION_LABEL[t.direction],
+            txnTitle(t, customers),
+            t.asset_code,
+            (t.direction === 'out' ? -1 : 1) * toMajor(t.amount, d),
+            toMajor(t.fee, d),
+            t.status,
+            t.provider_ref ?? '',
+            t.txid ?? '',
+          ];
+        }),
     ]);
     notify(`${m.label} statement downloaded`);
   };
@@ -129,7 +108,7 @@ export default function ReportsPage({ data, notify }: PageProps) {
     <>
       <PageHeader
         title="Reports"
-        description="How your business is performing. USDT is converted to naira at the demo rate."
+        description="Settled totals by asset, straight from your Fluxel ledger."
         actions={
           <Segmented<Range>
             label="Range"
@@ -144,74 +123,73 @@ export default function ReportsPage({ data, notify }: PageProps) {
         }
       />
 
-      <StatStrip
-        items={[
-          { label: 'Gross volume', value: formatMoney(report.gross, 'NGN', { compact: true }), hint: `${report.count.toLocaleString()} payments` },
-          { label: 'Net revenue', value: formatMoney(report.net, 'NGN', { compact: true }), hint: 'After fees and refunds' },
-          { label: 'Success rate', value: `${report.successRate.toFixed(1)}%`, hint: 'Of attempted payments' },
-          { label: 'Average payment', value: formatMoney(report.average, 'NGN', { compact: true }) },
-        ]}
-      />
-
-      <Card>
-        <CardHeader title="Money in per day" description={`Successful payments, last ${range} days`} />
-        <div className="px-3 sm:px-5 pb-5">
-          <BarChart points={report.daily} currency="NGN" label="Money received per day" />
+      {summary.loading ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Card key={i} className="p-5">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-4 h-8 w-full" />
+            </Card>
+          ))}
         </div>
-      </Card>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      ) : summary.error ? (
         <Card>
-          <CardHeader title="By payment method" />
-          <BarList rows={report.byChannel} />
+          <ErrorState message={summary.error.message} onRetry={summary.reload} />
         </Card>
-        <Card>
-          <CardHeader title="By source" />
-          <BarList rows={report.bySource} />
-        </Card>
-      </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Totals title="Received" rows={summary.data?.deposits ?? []} assets={assets} />
+          <Totals title="Paid out" rows={summary.data?.payouts ?? []} assets={assets} negative />
+          <Totals title="Transferred between customers" rows={summary.data?.transfers ?? []} assets={assets} />
+        </div>
+      )}
 
       <Card className="mt-6">
-        <CardHeader title="Fees and deductions" description={`Last ${range} days`} />
-        <dl className="border-t border-line divide-y divide-line text-sm">
-          {[
-            ['Gross volume', report.gross],
-            ['Fluxel fees', -report.fees],
-            ['Refunds', -report.refunded],
-          ].map(([label, v]) => (
-            <div key={label as string} className="flex justify-between px-5 py-3">
-              <dt className="text-ink-2">{label}</dt>
-              <dd className="tabular-nums text-ink">{formatMoney(v as number, 'NGN')}</dd>
+        <CardHeader title="Naira received per day" description={`Last ${range} days`} />
+        <div className="px-3 sm:px-5 pb-5">
+          {txns.loading ? (
+            <Skeleton className="h-[220px] w-full" />
+          ) : daily.some((d) => d.count) ? (
+            <BarChart points={daily} currency="NGN" label="Naira received per day" />
+          ) : (
+            <div className="h-[220px] flex items-center justify-center rounded-lg border border-dashed border-line text-sm text-ink-3">
+              No naira deposits in this period.
             </div>
-          ))}
-          <div className="flex justify-between px-5 py-3 font-semibold">
-            <dt className="text-ink">Net revenue</dt>
-            <dd className="tabular-nums text-ink">{formatMoney(report.net, 'NGN')}</dd>
-          </div>
-        </dl>
+          )}
+        </div>
       </Card>
 
       <Card className="mt-6 overflow-hidden">
         <CardHeader title="Statements" description="Every transaction in the month, as CSV — for your accountant." />
-        <ul className="border-t border-line divide-y divide-line">
-          {months.map((m) => (
-            <li key={m.label} className="flex items-center gap-3 px-5 py-3.5">
-              <span className="size-9 shrink-0 inline-flex items-center justify-center rounded-lg bg-gold-soft text-gold border border-brand/40">
-                <FileText className="size-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-ink">{m.label}</span>
-                <span className="block text-xs text-ink-3">
-                  {m.txns.length.toLocaleString()} transactions{m.partial ? ' · month to date' : ''}
-                </span>
-              </span>
-              <Button size="sm" onClick={() => statement(m)} disabled={m.txns.length === 0}>
-                <Download className="size-4" />
-                CSV
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div className="border-t border-line">
+          {txns.loading ? (
+            <LoadingRows rows={3} />
+          ) : txns.error ? (
+            <ErrorState message={txns.error.message} onRetry={txns.reload} />
+          ) : months.every((m) => m.rows.length === 0) ? (
+            <EmptyState title="Nothing to export yet" description="Statements fill in as money moves." />
+          ) : (
+            <ul className="divide-y divide-line">
+              {months.map((m) => (
+                <li key={m.label} className="flex items-center gap-3 px-5 py-3.5">
+                  <span className="size-9 shrink-0 inline-flex items-center justify-center rounded-lg bg-gold-soft text-gold border border-brand/40">
+                    <FileText className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-ink">{m.label}</span>
+                    <span className="block text-xs text-ink-3">
+                      {m.rows.length} transactions{m.partial ? ' · month to date' : ''}
+                    </span>
+                  </span>
+                  <Button size="sm" onClick={() => statement(m)} disabled={m.rows.length === 0}>
+                    <Download className="size-4" />
+                    CSV
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </Card>
     </>
   );

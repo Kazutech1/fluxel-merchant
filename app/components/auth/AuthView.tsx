@@ -8,8 +8,6 @@ import type { AuthSession } from '../../types/auth';
 
 interface AuthViewProps {
   onAuthenticated: (session: AuthSession) => void;
-  /** Opens the console with simulated data, no account needed. */
-  onExploreDemo?: () => void;
 }
 
 const CAPABILITIES = [
@@ -87,7 +85,7 @@ const BrandPanel = memo(function BrandPanel() {
   );
 });
 
-export default function AuthView({ onAuthenticated, onExploreDemo }: AuthViewProps) {
+export default function AuthView({ onAuthenticated }: AuthViewProps) {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
 
   const [email, setEmail] = useState('');
@@ -114,6 +112,10 @@ export default function AuthView({ onAuthenticated, onExploreDemo }: AuthViewPro
       if (wasDark) root.classList.add('dark');
     };
   }, []);
+
+  useEffect(() => {
+    document.title = `${isLogin ? 'Sign in' : 'Create your account'} · Fluxel`;
+  }, [isLogin]);
 
   const switchMode = (mode: 'login' | 'signup') => {
     setAuthMode(mode);
@@ -348,22 +350,6 @@ export default function AuthView({ onAuthenticated, onExploreDemo }: AuthViewPro
                 {isLogin ? 'Register a business' : 'Sign in'}
               </button>
             </p>
-
-            {onExploreDemo && (
-              <div className="mt-8 pt-6 border-t border-slate-200">
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={onExploreDemo}
-                  className="w-full h-12 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-900 hover:bg-slate-50 active:scale-[0.99] disabled:opacity-60 transition cursor-pointer"
-                >
-                  Explore the demo dashboard
-                </button>
-                <p className="mt-2 text-xs text-slate-500 text-center">
-                  Simulated balances, customers and payouts. Nothing real moves.
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
