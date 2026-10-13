@@ -1,6 +1,6 @@
 /**
- * `/api/v1/*` → `/v1/*` on the Fluxel API, with the console's key
- * (see `lib/server/consoleKeys.ts`).
+ * `/api/v1/*` → `/v1/*` on the Fluxel API, with the signed-in user's JWT
+ * (see `lib/server/v1.ts`).
  *
  * This is the authorization point for dashboard-initiated `/v1` calls: the
  * signed-in user's role (from their JWT) must hold the permission the route
@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { can, permissionForV1 } from '@/app/lib/permissions';
-import { signedInActor, v1Request } from '@/app/lib/server/consoleKeys';
+import { signedInActor, v1Request } from '@/app/lib/server/v1';
 import { errorResponse } from '@/app/lib/server/dashboardSession';
 
 type Ctx = { params: Promise<{ path: string[] }> };

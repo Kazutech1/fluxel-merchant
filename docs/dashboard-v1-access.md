@@ -1,51 +1,25 @@
-# Dashboard access to `/v1` — what the console does today, and the backend change that fixes it
+# Dashboard access to `/v1`
 
-_Written for the Fluxel-System backend team. Findings come from testing against the sandbox API (`https://apy.wiyuapp.com`) on 11 Oct 2026 with a throwaway business ("Console QA Ltd")._
+_Written for the Fluxel-System backend team. Updated 13 Oct 2026, after testing against the sandbox API (`https://apy.wiyuapp.com`)._
 
-## The problem
+## Status: the console now uses the dashboard JWT
 
-The merchant console needs balances, transactions, customers, payment links, payout accounts, refunds, disputes, webhooks, checkout config and reports. All of these live under `/v1`, and `/v1` only accepts merchant API keys (`bearer_auth_middleware` → `tenant_context_middleware`). A dashboard session JWT is refused with `401 key_invalid`.
+The API accepts the dashboard JWT on `/v1`. On 13 Oct 2026 every `/v1` route the console uses answered a JWT request, reads and writes alike. So the console no longer creates a sandbox secret key for each business:
 
-## What the console does now (the bridge)
+- Every `/v1` call goes through `web/app/api/v1/[...path]/route.ts` with the signed-in user's JWT (`web/app/lib/server/v1.ts`).
+- That route still checks the user's role (Doc 8 §4, `web/app/lib/permissions.ts`) before forwarding, so a page gets a clear 403. The API should enforce the same mapping itself, because a user's JWT can call `/v1` directly.
+- Token refresh is shared between concurrent requests (`fluxelApi.ts`). A page fires several calls at once, and the API revokes the session if one refresh token is presented twice.
 
-`web/app/lib/server/consoleKeys.ts`:
+## Still open: a publishable key for checkout links
 
-- On first need, the Next.js server mints a **sandbox secret key** for the business through `POST /v1/dashboard/keys`, which does accept the JWT. It mints a sandbox publishable key only when a checkout link is needed.
-- The key is stored AES-256-GCM-encrypted in an httpOnly cookie. It's shared in memory by every signed-in user of that business on the server instance, and revoked on sign-out.
-- Every `/v1` call goes through `web/app/api/v1/[...path]/route.ts`. That route checks the user's role against Doc 8 §4 (`web/app/lib/permissions.ts`) before forwarding the request.
+Checkout links (`/pay/{intent}?c=…`) carry the merchant's `pk_` key, because shoppers aren't signed in. The API returns a key's plaintext only when it's created, and there's no endpoint that returns it later. So the console creates one sandbox publishable key the first time a link needs it, and remembers it (`web/app/lib/server/checkoutKey.ts`).
 
-Why a sandbox key: `TenantCtx` has no environment, and `KeyEnv::Live` only adds the KYB gate in `tenant.rs`. So a test key sees exactly the same data as a live key, and it works before KYB.
+- It's kept in server memory and in a cookie bound to the business. A new browser or a server restart with no cookie creates another key, which uses up the two-key limit.
+- It's never revoked on sign-out, because links already sent use it.
 
-**Limits of the bridge:**
+**Ask:** a `GET /v1/dashboard/checkout-key` that returns one long-lived publishable key per business, creating it on first call. Publishable keys are read-only and public by design, so returning the plaintext is safe.
 
-1. **It consumes key slots.** `crates/auth/src/repo.rs` caps active keys at 2 per class and environment (Doc 8 §1). The console uses one sandbox secret slot per business, plus one publishable slot once a checkout link exists. After a server restart, or with several server instances, it can use two.
-   - A merchant whose integration already uses two sandbox secret keys can't use the dashboard until they revoke one. The console shows a dedicated screen for this, with Revoke buttons.
-   - The console's slot also blocks the "create new, then revoke old" rotation that the two-key limit exists for.
-2. **The console keys show up in the merchant's key list.** The Developers page hides this server's console key and explains it, but keys minted by other server instances look like ordinary keys.
-3. **Keys can leak if nobody signs out.** If every user simply closes the browser, the key stays active until someone signs out or it's revoked.
-
-## The fix: let dashboard sessions call `/v1`
-
-`dashboard_auth_middleware` already verifies the JWT, checks the business status and inserts a `TenantCtx`, which is exactly what the `/v1` handlers extract. None of the `/v1` handlers read the `ApiKey` extension directly; only `tenant.rs` does. So the `/v1` router can be mounted a second time behind the dashboard middleware. A sketch for `api/src/main.rs` (**not compiled**; it mirrors the existing pipeline):
-
-```rust
-// Dashboard sessions reach the merchant API under /v1/dashboard/api/*.
-// Same handlers as /v1; authorization comes from the JWT + role, not a key.
-let dashboard_api = Router::new()
-    .nest("/v1/dashboard/api", routes::v1::router())
-    .layer(axum::middleware::from_fn(middleware::idempotency::idempotency_middleware))
-    .layer(axum::middleware::from_fn(middleware::ratelimit::rate_limit_middleware))
-    .layer(axum::middleware::from_fn_with_state(state.clone(), middleware::dashboard_rbac::require_role))
-    .layer(axum::middleware::from_fn_with_state(state.clone(), middleware::dashboard_auth::dashboard_auth_middleware));
-```
-
-You'd also need:
-
-- **A `dashboard_rbac` middleware.** Doc 8 §7 says route metadata declares the required permission, and middleware checks the role set. The JWT already carries `roles`. The route → permission table the console enforces today is in `web/app/lib/permissions.ts` (`permissionForV1`); port it as-is. Without this, a `read_only` user could call `POST /payouts` directly with their JWT.
-- **`dashboard_auth_middleware` should insert the verified claims** (or at least `roles`) as a request extension, so the RBAC layer doesn't verify the JWT twice.
-- **Live-key gating has no equivalent for sessions.** Decide whether dashboard sessions of non-`tier_1` businesses may initiate payouts. Today the console only uses sandbox keys, so it inherits "sandbox account" semantics.
-
-Once that's deployed, the console change is small. `v1Request` calls `dashboardRequest('/v1/dashboard/api/...')` instead of minting keys, and `consoleKeys.ts` can be deleted. The publishable key for checkout links still needs a home. The simplest option is a single long-lived publishable key per business, created once and stored server-side by the API, or returned by a `GET /v1/dashboard/checkout-key` endpoint.
+**Keys left over:** businesses that used the console before this change may still have an active sandbox secret key that the console created. They show up in Developers → API keys and can be revoked there.
 
 ## Other backend issues found while testing
 

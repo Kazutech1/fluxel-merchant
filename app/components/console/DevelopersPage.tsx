@@ -202,8 +202,8 @@ function KeysTab({ role, business, notify }: PageProps) {
         </div>
         {sessionKeys.length > 0 && (
           <p className="px-5 py-3 border-t border-line text-xs text-ink-3">
-            {sessionKeys.length} more {sessionKeys.length === 1 ? 'key is' : 'keys are'} used by this dashboard session to load your data. They’re revoked
-            automatically when you sign out.
+            {sessionKeys.length} more {sessionKeys.length === 1 ? 'key is' : 'keys are'} used by the dashboard for checkout links. Revoking it stops
+            links you’ve already sent from working.
           </p>
         )}
       </Card>
