@@ -111,18 +111,33 @@ function isUsable(token: string): boolean {
  * The API rotates refresh tokens single-use, and presenting an already-rotated
  * one revokes the whole family (`UserAuthServiceImpl::refresh`). So refreshing
  * happens here and only here, and any failure clears the jar rather than
- * leaving a half-dead session behind. Concurrent rotation from two in-flight
- * requests would still lose the race and log the user out — acceptable while
- * `GET /business` is the only protected call, but it will need a single-flight
- * lock once more dashboard endpoints are proxied.
+ * leaving a half-dead session behind.
+ *
+ * A page fires several `/v1` calls at once, and each may find the access token
+ * spent. They share one refresh per refresh token, and its result is kept for
+ * a minute so a request that read the old cookie just after still gets the new
+ * pair instead of replaying the spent token. (Per server process — enough for
+ * one instance; several instances would need a shared store.)
  */
-async function rotate(refreshToken: string): Promise<TokenPair> {
-  let pair: TokenPair;
-  try {
-    pair = await apiRequest<TokenPair>('/v1/dashboard/auth/refresh', {
+const refreshes = new Map<string, Promise<TokenPair>>();
+
+function refreshOnce(refreshToken: string): Promise<TokenPair> {
+  let pending = refreshes.get(refreshToken);
+  if (!pending) {
+    pending = apiRequest<TokenPair>('/v1/dashboard/auth/refresh', {
       method: 'POST',
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
+    refreshes.set(refreshToken, pending);
+    setTimeout(() => refreshes.delete(refreshToken), 60_000).unref?.();
+  }
+  return pending;
+}
+
+async function rotate(refreshToken: string): Promise<TokenPair> {
+  let pair: TokenPair;
+  try {
+    pair = await refreshOnce(refreshToken);
   } catch (cause) {
     await clearSession();
     throw cause instanceof FluxelApiError && cause.status === 503

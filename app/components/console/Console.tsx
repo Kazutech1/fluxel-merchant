@@ -24,14 +24,13 @@ import {
 
 import { toggleTheme, useTheme } from '../../lib/theme';
 import { clearCache } from '../../lib/console/client';
-import { useConsoleMeta, useDisputes } from '../../lib/console/data';
+import { useDisputes } from '../../lib/console/data';
 import type { Txn } from '../../lib/console/models';
 import { ROLE_LABEL, isRole } from '../../lib/permissions';
 import type { AuthBusiness, AuthSession } from '../../types/auth';
 import { cx } from './ui';
 import { PAGE_LABELS, isPage, type Page, type PageProps } from './nav';
 import CommandPalette from './CommandPalette';
-import ConnectState from './ConnectState';
 import OverviewPage from './OverviewPage';
 import TransactionsPage from './TransactionsPage';
 import CustomersPage from './CustomersPage';
@@ -157,10 +156,7 @@ export default function Console({ session, onLogout }: ConsoleProps) {
   }, []);
 
   const role = session.user.roles[0] ?? '';
-  // Every page waits for this browser to be connected to /v1 — see ConnectState.
-  const conn = useConsoleMeta();
-  const connected = Boolean(conn.data);
-  const disputes = useDisputes(connected);
+  const disputes = useDisputes();
   const badges: Partial<Record<Page, number>> = {
     disputes: (disputes.data ?? []).filter((d) => d.status === 'open' || d.status === 'under_review').length,
   };
@@ -360,21 +356,20 @@ export default function Console({ session, onLogout }: ConsoleProps) {
         )}
 
         <main className="flex-1 w-full max-w-[1200px] mx-auto px-4 sm:px-8 py-8 sm:py-10">
-          {!connected && <ConnectState conn={conn} role={role} notify={notify} />}
-          {connected && route.page === 'overview' && <OverviewPage {...pageProps} />}
-          {connected && route.page === 'transactions' && <TransactionsPage {...pageProps} />}
-          {connected && route.page === 'customers' && <CustomersPage {...pageProps} />}
-          {connected && route.page === 'links' && <PaymentLinksPage {...pageProps} />}
-          {connected && route.page === 'refunds' && <RefundsPage />}
-          {connected && route.page === 'disputes' && <DisputesPage {...pageProps} />}
-          {connected && route.page === 'reports' && <ReportsPage {...pageProps} />}
-          {connected && route.page === 'developers' && <DevelopersPage {...pageProps} />}
-          {connected && route.page === 'settings' && <SettingsPage {...pageProps} />}
+          {route.page === 'overview' && <OverviewPage {...pageProps} />}
+          {route.page === 'transactions' && <TransactionsPage {...pageProps} />}
+          {route.page === 'customers' && <CustomersPage {...pageProps} />}
+          {route.page === 'links' && <PaymentLinksPage {...pageProps} />}
+          {route.page === 'refunds' && <RefundsPage />}
+          {route.page === 'disputes' && <DisputesPage {...pageProps} />}
+          {route.page === 'reports' && <ReportsPage {...pageProps} />}
+          {route.page === 'developers' && <DevelopersPage {...pageProps} />}
+          {route.page === 'settings' && <SettingsPage {...pageProps} />}
         </main>
       </div>
 
       <WithdrawModal
-        open={withdrawing && connected}
+        open={withdrawing}
        
         businessName={business.name}
         notify={notify}
@@ -388,7 +383,7 @@ export default function Console({ session, onLogout }: ConsoleProps) {
       <TransactionDrawer txn={openTxn} role={role} onClose={() => setOpenTxn(null)} onNavigate={navigate} notify={notify} />
 
       <CommandPalette
-        open={searchOpen && connected}
+        open={searchOpen}
        
         role={role}
         onClose={() => setSearchOpen(false)}
