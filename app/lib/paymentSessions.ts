@@ -72,6 +72,15 @@ export interface PaymentSession {
 
   /** Where the payer is sent once the payment completes. */
   return_url?: string;
+
+  /** Block depth the API requires for this intent; overrides RAILS when set. */
+  confirmations_required?: number;
+  /**
+   * Backed by a real Fluxel intent (liveCheckout.ts) rather than the demo
+   * store. The address/account is provisioned by the API on its own, and
+   * status changes come only from the API — panels hide manual controls.
+   */
+  live?: boolean;
 }
 
 /* ------------------------------------------------------------------ */

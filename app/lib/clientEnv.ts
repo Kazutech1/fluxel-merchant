@@ -25,10 +25,7 @@ export function useOrigin(): string {
   return useSyncExternalStore(noSubscribe, readOrigin, noOrigin);
 }
 
-const readDemoFlag = () => new URLSearchParams(window.location.search).get('demo') !== '0';
-const demoOnByDefault = () => true;
-
-/** Demo affordances are on unless the URL says `?demo=0`. */
+/** Demo mode disabled - platform operates in live mode only. */
 export function useDemoEnabled(): boolean {
-  return useSyncExternalStore(noSubscribe, readDemoFlag, demoOnByDefault);
+  return false;
 }

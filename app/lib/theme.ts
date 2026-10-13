@@ -15,12 +15,12 @@ const CHANGE_EVENT = 'fluxel:theme-changed';
  */
 
 function getSnapshot(): Theme {
-  if (typeof window === 'undefined') return 'dark';
-  return window.localStorage.getItem(STORAGE_KEY) === 'light' ? 'light' : 'dark';
+  if (typeof window === 'undefined') return 'light';
+  return window.localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light';
 }
 
 function getServerSnapshot(): Theme {
-  return 'dark';
+  return 'light';
 }
 
 function subscribe(onChange: () => void): () => void {

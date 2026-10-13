@@ -1,0 +1,534 @@
+{
+  "info": {
+    "name": "Fluxel — Local Crypto/Fiat API",
+    "description": "Every HTTP route currently registered in `api/src/routes/*` (v1 public API, health, inbound provider callbacks). \n\nBefore using: set the `sk_key` collection variable — see README.md in this repo (or `local.env.example` + the docker-compose Quickstart) for how to mint one via `xtask bootstrap-test-business`. There is currently no HTTP route to create a business or mint a key — this is deliberate, documented in `xtask/src/bootstrap_test_business.rs`'s own doc comment.\n\nEvery error response (any 4xx/5xx from `error_map.rs`) has the shape `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{sk_key}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "sk_key",
+      "value": "",
+      "type": "string",
+      "description": "Full sk_ bearer key from `xtask bootstrap-test-business` — see README.md"
+    },
+    {
+      "key": "customer_id",
+      "value": "",
+      "type": "string",
+      "description": "Set after running Customers > Create Customer"
+    },
+    {
+      "key": "fiat_deposit_intent_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "payout_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "crypto_withdrawal_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health (no auth)",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health/live",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": "No `TenantCtx`, no auth at all (Doc 1 §6.1 step 3/5) — this is the ALB target-group health check path. Expect `200`."
+          }
+        },
+        {
+          "name": "Readiness",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health/ready",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": "Same as Liveness but checks downstream dependencies. Expect `200` with body `ok` once Postgres/Mongo/Redis are all reachable."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "Create Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('customer_id', body.id);",
+                  "    console.log('customer_id set to', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/customers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "customers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"external_id\": \"postman-customer-1\"\n}"
+            },
+            "description": "Doc 5 §2.1. `201 {id, status, wallets:\"provisioning\"}`. Wallet addresses derive asynchronously (outbox → Redis Streams → `cg_wallets` consumer) — wait a couple seconds before calling List Addresses. `name`/`email`/`metadata` are accepted but currently unused server-side (`#[allow(dead_code)]` on those fields)."
+          }
+        },
+        {
+          "name": "List Addresses",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/customers/{{customer_id}}/addresses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "customers",
+                "{{customer_id}}",
+                "addresses"
+              ]
+            },
+            "description": "Doc 5 §2.1. `[{chain, address}]` — 4 entries once derivation completes (bitcoin, ethereum, bsc, tron — bsc shares ethereum's address by design, Doc 11 §1). If this returns empty, `cg_wallets` hasn't processed the `customer.created` event yet; check `worker` logs."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fiat Deposit Intents",
+      "item": [
+        {
+          "name": "Create Deposit Intent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('fiat_deposit_intent_id', body.id);",
+                  "    console.log('fiat_deposit_intent_id set to', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/customers/{{customer_id}}/fiat-deposit-intents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "customers",
+                "{{customer_id}}",
+                "fiat-deposit-intents"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"500000\",\n  \"amount_mode\": \"fixed\"\n}"
+            },
+            "description": "Doc 5 §2.3, Doc 10 §2. `amount` is minor units (kobo for NGN) — `500000` = ₦5,000.00. `amount_mode` is one of `fixed` (default) | `minimum` | `open`. `201 {id, status, expected_amount, va}` — `va` (virtual account) is `null` initially, provisioned asynchronously by `cg.fiat`; needs real Lenco sandbox credentials in `.env.local` (`LENCO_API_TOKEN`/`LENCO_ACCOUNT_UUID`) to actually provision — that's Rust A's domain, not exercised by the crypto-side local stack alone."
+          }
+        },
+        {
+          "name": "Get Deposit Intent",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/fiat-deposit-intents/{{fiat_deposit_intent_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "fiat-deposit-intents",
+                "{{fiat_deposit_intent_id}}"
+              ]
+            },
+            "description": "Doc 5 §2.3. `{id, customer_id, status, expected_amount, amount_received, expires_at, va}`. `status` is one of `pending|ready|fulfilled|underpaid|expired|failed`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payouts",
+      "item": [
+        {
+          "name": "Create Payout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('payout_id', body.id);",
+                  "    console.log('payout_id set to', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/payouts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payouts"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"500000\",\n  \"bank_code\": \"044\",\n  \"account_number\": \"0000000000\",\n  \"account_name\": \"Test Account\",\n  \"customer_id\": \"{{customer_id}}\"\n}"
+            },
+            "description": "Doc 5 §2.4, Doc 10 §4. Runs a REAL Lenco name-enquiry call first (Doc 1 §8.6 step 1) — `account_name` must match what Lenco resolves for `bank_code`/`account_number`, or this returns `422 name_mismatch`. Needs real `LENCO_API_TOKEN` in `.env.local` to do anything but fail with `503 provider_unavailable`. `bank_code`/`account_number` here are placeholders — use List Banks + a real Lenco sandbox test account to get values that actually resolve. `customer_id` is optional (business-initiated payouts omit it)."
+          }
+        },
+        {
+          "name": "Get Payout",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/payouts/{{payout_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payouts",
+                "{{payout_id}}"
+              ]
+            },
+            "description": "Doc 5 §2.4. `{id, status, amount, destination}`. `status` is one of `requested|held|approved|executing|completed|failed|rejected|uncertain|reversed`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Crypto Withdrawals",
+      "item": [
+        {
+          "name": "Create Crypto Withdrawal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('crypto_withdrawal_id', body.id);",
+                  "    console.log('crypto_withdrawal_id set to', body.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/crypto-withdrawals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "crypto-withdrawals"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer_id\": \"{{customer_id}}\",\n  \"chain\": \"ethereum\",\n  \"asset_code\": \"ETH\",\n  \"amount\": \"1000000000000000\",\n  \"destination_address\": \"0x000000000000000000000000000000000000dEaD\"\n}"
+            },
+            "description": "Doc 5 §2.4, Doc 1 §8.7. `chain` is one of `bitcoin|ethereum|bsc|tron`. `amount` is minor units (wei for ETH/BSC, sat for BTC, sun for TRON) — the example is 0.001 ETH. `destination_address` is validated for chain-correct format (`crypto::is_valid_address`) and checked against Fluxel's own deposit addresses (returns `422 internal_transfer_unavailable` if it matches one of ours — `POST /v1/transfers` for actual internal reroutes doesn't exist yet). `source:\"business\"` (treasury-initiated withdrawals) is accepted by the request shape but explicitly rejected — only customer-initiated withdrawals are implemented. Broadcasting a real transaction needs the customer's deposit address to actually hold funds and a real `ALCHEMY_API_KEY`/`TRON_API_KEY` in `.env.local` — with neither, this creates the record (`201`) but `withdrawal_executor` will fail safely on insufficient balance."
+          }
+        },
+        {
+          "name": "Get Crypto Withdrawal",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/crypto-withdrawals/{{crypto_withdrawal_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "crypto-withdrawals",
+                "{{crypto_withdrawal_id}}"
+              ]
+            },
+            "description": "Doc 5 §2.4. `{id, status, chain, asset_code, amount, fee, destination_address, txid, network_fee}`. `status` is one of `processing|pending_review|broadcast|confirmed|failed|rerouted_internal`. `txid`/`network_fee` are `null` until broadcast."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bank Utilities",
+      "item": [
+        {
+          "name": "Resolve Bank Account (Name Enquiry)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/bank-accounts/resolve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "bank-accounts",
+                "resolve"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bank_code\": \"044\",\n  \"account_number\": \"0000000000\"\n}"
+            },
+            "description": "Doc 5 §2.6. `{account_name}` on success. Real Lenco call — needs `LENCO_API_TOKEN`, and real sandbox bank/account values to succeed (the example values are placeholders that will 422)."
+          }
+        },
+        {
+          "name": "List Banks",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/banks",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "banks"
+              ]
+            },
+            "description": "Doc 5 §2.6. `[{code, name}]` — real Lenco call, cached (`banks_cache` in `LencoProvider`). Use this to get real `bank_code` values for the other fiat requests."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Register Webhook Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/webhook-endpoints",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "webhook-endpoints"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"http://host.docker.internal:18080/\",\n  \"events\": [\"customer.wallets.ready\"]\n}"
+            },
+            "description": "Doc 5 §2.7. `201 {id, secret}` — `secret` is shown once, used to HMAC-verify deliveries (Doc 7 §3). If your receiver runs on your host machine (not in the compose network), use `host.docker.internal` instead of `localhost` so the `worker` container's outbound delivery can actually reach it — `localhost` inside a container means the container itself, not your host (the exact bug `dev_msg/2026-08-06-smoke-test-infra.md` documents hitting during the original sandbox smoke test). Only `customer.wallets.ready` actually fires today — Doc 7 §4's retry schedule/auto-disable/replay aren't built (`worker/src/jobs/webhook_dispatcher.rs` is still a stub)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Scaffold / Not Yet Built (diagnostic only)",
+      "item": [
+        {
+          "name": "v1 Scaffold Marker",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                ""
+              ]
+            },
+            "description": "Confirms the v1 router + auth/tenant middleware pipeline is reachable. `200 {status:\"scaffold\", doc:\"Doc 5 — REST API Specification v1\"}`."
+          }
+        },
+        {
+          "name": "Dashboard Scaffold Marker",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/dashboard/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dashboard",
+                ""
+              ]
+            },
+            "description": "Dashboard API is entirely unbuilt (Doc 16 P3) — this is the only route that exists under `/dashboard` right now."
+          }
+        },
+        {
+          "name": "Admin Scaffold Marker",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                ""
+              ]
+            },
+            "description": "Admin console API is entirely unbuilt (Doc 16 P3) — this is the only route that exists under `/admin` right now. Notably: there is no admin route for business creation or KYB approval either — that's why `xtask bootstrap-test-business` exists (see collection description)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inbound Provider Callbacks (reference only)",
+      "item": [
+        {
+          "name": "Lenco Callback (will 401 without a real signature)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Lenco-Signature",
+                "value": "<real HMAC signature required>"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/callbacks/lenco",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "callbacks",
+                "lenco"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"example.event\"\n}"
+            },
+            "description": "This is Lenco calling FLUXEL, not something a business/customer ever calls directly — included for reference/manual signature-verification testing only. `receive()` verifies the signature against `LencoProvider::verify_webhook` before persisting anything; without a real, correctly-signed payload this always returns `401`. Any `:provider` value other than `lenco` returns `200` and is ignored (logged, not an error)."
+          }
+        }
+      ]
+    }
+  ]
+}

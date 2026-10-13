@@ -19,8 +19,13 @@ export default function InvoiceSummary({ session }: { session: PaymentSession })
   // own column and isn't in the way.
   const [open, setOpen] = useState(false);
 
-  const symbol = getAssetSymbol(session.asset_code);
-  const money = (amount: string) => `${symbol}${formatQuote(amount, session.asset_code)}`;
+  // ₦ prefix for naira; crypto takes its ticker as a suffix — "$9.38" reads
+  // as dollars, not USDT, and "Ξ"/"₿" are easy to misread on an invoice.
+  const asset = session.asset_code;
+  const money = (amount: string) =>
+    asset === 'NGN'
+      ? `${getAssetSymbol(asset)}${formatQuote(amount, asset)}`
+      : `${formatQuote(amount, asset)} ${asset}`;
   const total = money(session.expected_amount);
 
   return (

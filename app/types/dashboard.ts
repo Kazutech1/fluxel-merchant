@@ -76,20 +76,7 @@ export interface Transaction {
   double_entry_legs?: DoubleEntryLeg[];
   fee_breakdown?: FeeBreakdown;
   block_confirmations?: { current: number; required: number };
-  raw_payload?: Record<string, any>;
-}
-
-export interface ApiKey {
-  id: string;
-  name: string;
-  class: 'pk' | 'sk';
-  env: Environment;
-  prefix: string;
-  last4: string;
-  created_at: string;
-  last_used_at: string;
-  status: 'active' | 'revoked';
-  ip_allowlist: string[];
+  raw_payload?: Record<string, unknown>;
 }
 
 export interface WebhookEndpoint {

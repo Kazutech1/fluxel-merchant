@@ -2,6 +2,71 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Merchant console tokens. Drawn from the sign-in page (white, slate ink,
+ * hairlines, one dark primary) and Fluxel's brand system (graphite canvas,
+ * warm cream ink, electric yellow used sparingly). Utilities read them as
+ * `bg-canvas`, `text-ink-2`, `border-line`, …
+ */
+@theme inline {
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --color-canvas: var(--fx-canvas);
+  --color-surface: var(--fx-surface);
+  --color-subtle: var(--fx-subtle);
+  --color-ink: var(--fx-ink);
+  --color-ink-2: var(--fx-ink-2);
+  --color-ink-3: var(--fx-ink-3);
+  --color-line: var(--fx-line);
+  --color-line-strong: var(--fx-line-strong);
+  /* Fluxel gold. `brand` is the fill; `gold` is gold that is safe as text or
+     a thin line on the current surface (deeper on white, bright on black). */
+  --color-brand: #dfa90a;
+  --color-brand-strong: #c99500;
+  --color-brand-ink: #0a0a0b;
+  --color-gold: var(--fx-gold);
+  --color-gold-soft: var(--fx-gold-soft);
+  --color-positive: var(--fx-positive);
+  --color-negative: var(--fx-negative);
+  --color-pending: var(--fx-pending);
+  --color-chart: var(--fx-chart);
+}
+
+:root {
+  --fx-canvas: #f7f7f5;
+  --fx-surface: #ffffff;
+  --fx-subtle: #f2f2ef;
+  --fx-ink: #0f0f10;
+  --fx-ink-2: #55555c;
+  --fx-ink-3: #74747c;
+  --fx-line: #e8e8e4;
+  --fx-line-strong: #d6d6d1;
+  --fx-positive: #15803d;
+  --fx-negative: #dc2626;
+  --fx-pending: #b45309;
+  --fx-chart: #b8860b;
+  --fx-gold: #8a6500;
+  --fx-gold-soft: #fbf1d5;
+}
+
+.dark {
+  --fx-canvas: #0a0a0b;
+  --fx-surface: #111113;
+  --fx-subtle: #1a1a1d;
+  --fx-ink: #f5f3ee;
+  --fx-ink-2: #b4b1aa;
+  --fx-ink-3: #85837d;
+  --fx-line: #232326;
+  --fx-line-strong: #313135;
+  --fx-positive: #4ade80;
+  --fx-negative: #f87171;
+  --fx-pending: #fbbf24;
+  --fx-chart: #e3ae12;
+  --fx-gold: #e8b628;
+  --fx-gold-soft: rgb(223 169 10 / 0.12);
+}
+
 @layer base {
   :root {
     --background: #f8fafc;
@@ -29,7 +94,7 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   transition: background-color 200ms ease-in-out, color 200ms ease-in-out;
 }
@@ -79,3 +144,22 @@ body {
 .gold-border-glow {
   box-shadow: 0 0 15px 0 rgba(254, 215, 0, 0.15);
 }
+
+/* Console overlays & toasts — quick, eased-out, never bouncy. */
+@keyframes fx-fade-in { from { opacity: 0; } }
+@keyframes fx-pop-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes fx-slide-in { from { transform: translateX(24px); opacity: 0; } }
+@keyframes fx-toast-in { from { opacity: 0; transform: translateY(6px); } }
+
+.fx-fade-in { animation: fx-fade-in 150ms ease-out; }
+.fx-pop-in { animation: fx-pop-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.fx-slide-in { animation: fx-slide-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.fx-toast-in { animation: fx-toast-in 180ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-fade-in, .fx-pop-in, .fx-slide-in, .fx-toast-in { animation: none; }
+}
+
+/* Scrolls, but without a visible bar (the sidebar nav). */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

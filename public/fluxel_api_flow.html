@@ -1,0 +1,2497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fluxel API Workflow & Postman Integration Guide</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090a0f;
+      --bg-surface: #10121a;
+      --bg-card: #151824;
+      --bg-code: #0b0c13;
+      --border: #232738;
+      --border-focus: #fed700;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent: #fed700;
+      --accent-glow: rgba(254, 215, 0, 0.15);
+      --accent-dark: #b89c00;
+      --primary: #6366f1;
+      --primary-light: #818cf8;
+      --cyan: #06b6d4;
+      --emerald: #10b981;
+      --rose: #f43f5e;
+      --amber: #f59e0b;
+      --badge-post: #10b981;
+      --badge-get: #06b6d4;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
+      --shadow-md: 0 8px 24px rgba(0,0,0,0.4);
+      --shadow-lg: 0 16px 40px rgba(0,0,0,0.6);
+      --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    [data-theme="light"] {
+      --bg: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-card: #f1f5f9;
+      --bg-code: #0f172a;
+      --border: #e2e8f0;
+      --border-focus: #d97706;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #94a3b8;
+      --accent: #d97706;
+      --accent-glow: rgba(217, 119, 6, 0.15);
+      --accent-dark: #b45309;
+      --primary: #4f46e5;
+      --primary-light: #6366f1;
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.05);
+      --shadow-md: 0 8px 24px rgba(0,0,0,0.08);
+      --shadow-lg: 0 16px 40px rgba(0,0,0,0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-dim);
+    }
+
+    /* Layout */
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    header {
+      background: rgba(16, 18, 26, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 14px 28px;
+    }
+
+    .header-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .logo-badge {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #fed700 0%, #f59e0b 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: #090a0f;
+      box-shadow: 0 4px 12px rgba(254, 215, 0, 0.3);
+    }
+
+    .brand-title {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-tag {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 8px;
+      background: var(--border);
+      color: var(--accent);
+      border-radius: 12px;
+      font-weight: 700;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: var(--transition);
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #090a0f;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover {
+      background: #ffd000;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(254, 215, 0, 0.25);
+    }
+
+    .btn-ghost {
+      background: var(--bg-surface);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-ghost:hover {
+      background: var(--bg-card);
+      border-color: var(--text-dim);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 28px;
+      width: 100%;
+    }
+
+    /* Hero Banner */
+    .hero-banner {
+      background: radial-gradient(circle at top right, rgba(254, 215, 0, 0.08), transparent 50%),
+                  radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.08), transparent 50%),
+                  var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 36px 40px;
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+    }
+
+    .hero-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+
+    .hero-title span {
+      background: linear-gradient(135deg, #fed700 0%, #fb923c 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      color: var(--text-muted);
+      font-size: 15px;
+      max-width: 820px;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .stat-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .stat-pill {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 30px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-pill .indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--emerald);
+      box-shadow: 0 0 8px var(--emerald);
+    }
+
+    /* Master Flow Diagram */
+    .flow-section {
+      margin-bottom: 40px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .flow-stepper {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+      position: relative;
+    }
+
+    .flow-step-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      position: relative;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .flow-step-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .flow-step-card.active {
+      border-color: var(--accent);
+      background: linear-gradient(145deg, rgba(254, 215, 0, 0.05) 0%, var(--bg-surface) 100%);
+      box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm);
+    }
+
+    .flow-step-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      background: var(--border);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .flow-step-card.active .flow-step-num {
+      background: var(--accent);
+      color: #090a0f;
+    }
+
+    .flow-step-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .flow-step-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .flow-step-arrow {
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 2;
+      color: var(--text-dim);
+      font-size: 14px;
+      display: none;
+    }
+
+    /* Filter & Controls Bar */
+    .controls-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px 20px;
+      margin-bottom: 28px;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 260px;
+      max-width: 440px;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 9px 14px 9px 36px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--font-sans);
+      outline: none;
+      transition: var(--transition);
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+
+    .filter-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .filter-tag {
+      padding: 6px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .filter-tag:hover {
+      border-color: var(--text-dim);
+      color: var(--text);
+    }
+    .filter-tag.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #090a0f;
+      font-weight: 700;
+    }
+
+    /* Endpoints Grid / List */
+    .endpoints-list {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Category Group Header */
+    .category-group-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      margin-bottom: -12px;
+    }
+
+    .category-badge {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      background: var(--border);
+      color: var(--accent);
+      border-radius: 6px;
+    }
+
+    .category-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Endpoint Card */
+    .endpoint-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition);
+    }
+
+    .endpoint-card:hover {
+      border-color: #383e58;
+      box-shadow: var(--shadow-md);
+    }
+
+    .endpoint-header {
+      padding: 18px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .endpoint-identity {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .method-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.04em;
+    }
+
+    .method-POST {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--emerald);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .method-GET {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--cyan);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .endpoint-path {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .endpoint-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .endpoint-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .auth-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--primary-light);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .auth-badge.noauth {
+      background: rgba(100, 116, 139, 0.15);
+      color: var(--text-dim);
+      border-color: rgba(100, 116, 139, 0.3);
+    }
+
+    /* Next Move Banner inside Endpoint Card */
+    .next-move-banner {
+      background: linear-gradient(90deg, rgba(254, 215, 0, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .next-move-icon {
+      font-size: 16px;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+
+    .next-move-content {
+      flex: 1;
+    }
+
+    .next-move-heading {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .next-move-text {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .next-move-text code {
+      font-family: var(--font-mono);
+      background: rgba(255,255,255,0.07);
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: #fed700;
+    }
+
+    /* Tabbed Body */
+    .endpoint-body {
+      padding: 20px 24px;
+    }
+
+    .tabs-nav {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 18px;
+    }
+
+    .tab-btn {
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 700;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .tab-btn:hover {
+      color: var(--text);
+      background: var(--bg-card);
+    }
+    .tab-btn.active {
+      background: var(--border);
+      color: var(--accent);
+      border-color: var(--border);
+    }
+
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Grid for Request & Response side-by-side */
+    .req-res-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .req-res-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .pane-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .pane-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .status-200, .status-201 {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--emerald);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-4xx, .status-5xx {
+      background: rgba(244, 63, 94, 0.15);
+      color: var(--rose);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+
+    /* Code Block Box */
+    .code-box {
+      background: var(--bg-code);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .code-box-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 12px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: var(--transition);
+      font-family: var(--font-sans);
+    }
+    .copy-btn:hover {
+      color: var(--accent);
+      background: var(--border);
+    }
+
+    pre {
+      padding: 14px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: #cbd5e1;
+    }
+
+    /* Syntax Highlighting */
+    .token-key { color: #38bdf8; }
+    .token-string { color: #4ade80; }
+    .token-number { color: #f59e0b; }
+    .token-bool { color: #ec4899; }
+    .token-null { color: #94a3b8; }
+
+    /* Parameters Table */
+    .params-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .params-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      color: var(--text-dim);
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .params-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .params-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .param-name {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .param-type {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .param-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(244, 63, 94, 0.15);
+      color: var(--rose);
+      margin-left: 4px;
+    }
+
+    /* Info notes */
+    .alert-box {
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      margin-top: 14px;
+      font-size: 12px;
+      color: #c7d2fe;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .alert-box.warning {
+      background: rgba(245, 158, 11, 0.08);
+      border-color: rgba(245, 158, 11, 0.25);
+      color: #fde68a;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      background: var(--bg-surface);
+      padding: 24px 28px;
+      margin-top: 60px;
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: center;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--accent);
+      color: #090a0f;
+      padding: 10px 18px;
+      border-radius: var(--radius-md);
+      font-weight: 700;
+      font-size: 12px;
+      box-shadow: var(--shadow-lg);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Bar -->
+    <header>
+      <div class="header-inner">
+        <a href="#" class="brand">
+          <div class="logo-badge">⚡</div>
+          <div>
+            <div class="brand-title">
+              FLUXEL API
+              <span class="brand-tag">v1 Core Spec</span>
+            </div>
+          </div>
+        </a>
+
+        <div class="header-actions">
+          <button class="btn btn-ghost" onclick="toggleTheme()" id="themeBtn">
+            🌙 Theme
+          </button>
+          <button class="btn btn-ghost" onclick="expandAll(true)">
+            Expand All
+          </button>
+          <button class="btn btn-ghost" onclick="expandAll(false)">
+            Collapse All
+          </button>
+          <a href="fluxel_postman_collection.json" download="fluxel_postman_collection.json" class="btn btn-primary">
+            📥 Export Postman Collection
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+      
+      <!-- Hero Section -->
+      <section class="hero-banner">
+        <h1 class="hero-title">Fluxel Local API — <span>Interactive Workflow & Postman Flow</span></h1>
+        <p class="hero-desc">
+          Complete step-by-step developer playbook for every route in the Fluxel local stack. Follow the <strong>"Next Move"</strong> guidance on each request to seamlessly manage customers, derive multi-chain crypto addresses, provision fiat deposit virtual accounts, and execute outbound payouts.
+        </p>
+        
+        <div class="stat-pills">
+          <div class="stat-pill"><span class="indicator"></span> 15 Registered Endpoints</div>
+          <div class="stat-pill"><span class="indicator"></span> 7 Workflow Lifecycle Stages</div>
+          <div class="stat-pill"><span class="indicator"></span> Multi-chain Crypto (BTC, ETH, BSC, TRON)</div>
+          <div class="stat-pill"><span class="indicator"></span> NGN Fiat Virtual Accounts (Lenco)</div>
+          <div class="stat-pill"><span class="indicator"></span> HMAC SHA-256 Webhooks</div>
+        </div>
+      </section>
+
+      <!-- Master Flow / Stepper -->
+      <section class="flow-section">
+        <div class="section-title">
+          <span>🧭 Sequential Next Move Workflow Guide</span>
+        </div>
+        
+        <div class="flow-stepper">
+          <div class="flow-step-card active" onclick="filterFlow('all', this)">
+            <div class="flow-step-num">★</div>
+            <div class="flow-step-title">All Endpoints</div>
+            <div class="flow-step-desc">View all 15 endpoints across the stack</div>
+          </div>
+
+          <div class="flow-step-card" onclick="filterFlow('health', this)">
+            <div class="flow-step-num">01</div>
+            <div class="flow-step-title">Health Checks</div>
+            <div class="flow-step-desc">Verify liveness & readiness of downstream databases</div>
+          </div>
+
+          <div class="flow-step-card" onclick="filterFlow('customers', this)">
+            <div class="flow-step-num">02</div>
+            <div class="flow-step-title">Customer Onboarding</div>
+            <div class="flow-step-desc">Create customer & derive 4 multi-chain deposit addresses</div>
+          </div>
+
+          <div class="flow-step-card" onclick="filterFlow('fiat', this)">
+            <div class="flow-step-num">03</div>
+            <div class="flow-step-title">Fiat Deposits</div>
+            <div class="flow-step-desc">Create intent & receive dynamic NGN virtual account</div>
+          </div>
+
+          <div class="flow-step-card" onclick="filterFlow('banks', this)">
+            <div class="flow-step-num">04</div>
+            <div class="flow-step-title">Bank Enquiry</div>
+            <div class="flow-step-desc">List supported banks & resolve account recipient name</div>
+          </div>
+
+          <div class="flow-step-card" onclick="filterFlow('payouts', this)">
+            <div class="flow-step-num">05</div>
+            <div class="flow-step-title">Fiat Payouts</div>
+            <div class="flow-step-desc">Execute outbound bank payout after name enquiry match</div>
+          </div>
+
+          <div class="flow-step-card" onclick="filterFlow('crypto', this)">
+            <div class="flow-step-num">06</div>
+            <div class="flow-step-title">Crypto Withdrawals</div>
+            <div class="flow-step-desc">Validate destination address & broadcast to blockchain</div>
+          </div>
+
+          <div class="flow-step-card" onclick="filterFlow('webhooks', this)">
+            <div class="flow-step-num">07</div>
+            <div class="flow-step-title">Webhooks</div>
+            <div class="flow-step-desc">Register endpoints & verify HMAC SHA-256 signatures</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Controls & Search -->
+      <section class="controls-bar">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="Search route, method, param, error code..." oninput="searchEndpoints()" />
+        </div>
+
+        <div class="filter-tags" id="categoryTags">
+          <button class="filter-tag active" onclick="setCategoryFilter('all', this)">All</button>
+          <button class="filter-tag" onclick="setCategoryFilter('health', this)">Health</button>
+          <button class="filter-tag" onclick="setCategoryFilter('customers', this)">Customers</button>
+          <button class="filter-tag" onclick="setCategoryFilter('fiat', this)">Fiat Deposits</button>
+          <button class="filter-tag" onclick="setCategoryFilter('payouts', this)">Payouts</button>
+          <button class="filter-tag" onclick="setCategoryFilter('crypto', this)">Crypto Withdrawals</button>
+          <button class="filter-tag" onclick="setCategoryFilter('banks', this)">Bank Utilities</button>
+          <button class="filter-tag" onclick="setCategoryFilter('webhooks', this)">Webhooks</button>
+          <button class="filter-tag" onclick="setCategoryFilter('scaffold', this)">Scaffolds & Callbacks</button>
+        </div>
+      </section>
+
+      <!-- Endpoints Container -->
+      <div class="endpoints-list" id="endpointsList">
+
+        <!-- =================== 1. HEALTH =================== -->
+        <div class="category-group-header" data-cat="health">
+          <span class="category-badge">Health & Diagnostics</span>
+          <span class="category-line"></span>
+        </div>
+
+        <!-- 1.1 Liveness -->
+        <div class="endpoint-card" data-cat="health" data-flow="health" id="ep-liveness">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/health/live</span>
+              <span class="endpoint-name">ALB Target Liveness Check</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge noauth">noauth</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-liveness')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">🚀</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Infrastructure Check</div>
+              <div class="next-move-text">
+                This is the zero-overhead ALB / target-group check. If this returns <code>200</code>, proceed immediately to <code>GET /health/ready</code> to verify that Postgres, MongoDB, and Redis are reachable.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                No <code>TenantCtx</code>, no auth middleware at all (Doc 1 §6.1 step 3/5). Used by load balancers and container orchestrators to confirm the HTTP server is alive.
+              </p>
+              <table class="params-table">
+                <thead>
+                  <tr><th>Property</th><th>Details</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td class="param-name">Auth Header</td><td>None (noauth)</td></tr>
+                  <tr><td class="param-name">Expected Status</td><td><code>200 OK</code></td></tr>
+                  <tr><td class="param-name">Downstream Impact</td><td>Zero DB/Cache calls. Instant response.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Request</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header">
+                      <span>GET /health/live</span>
+                    </div>
+                    <pre><code>GET /health/live HTTP/1.1
+Host: {{base_url}}</code></pre>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-200">200 OK</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header">
+                      <span>application/json</span>
+                      <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                    </div>
+                    <pre><code>{
+  <span class="token-key">"status"</span>: <span class="token-string">"ok"</span>
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X GET "http://localhost:8080/health/live"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1.2 Readiness -->
+        <div class="endpoint-card" data-cat="health" data-flow="health" id="ep-readiness">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/health/ready</span>
+              <span class="endpoint-name">Dependency Readiness Check</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge noauth">noauth</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-readiness')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">🚀</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Bootstrap Credentials</div>
+              <div class="next-move-text">
+                If Readiness returns <code>200 "ok"</code>, the stack's Postgres, MongoDB, and Redis are ready. Next: mint an <code>sk_key</code> via <code>cargo xtask bootstrap-test-business</code>, set it in your Postman collection variables, and proceed to <strong>Customers > Create Customer</strong>.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Executes active ping against downstream data stores. Guarantees that write operations, Redis outbox streams, and ledger tables will succeed.
+              </p>
+              <table class="params-table">
+                <thead>
+                  <tr><th>Dependency</th><th>Verification Performed</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td class="param-name">Postgres</td><td>Connection pool heartbeat & outbox table ready</td></tr>
+                  <tr><td class="param-name">MongoDB</td><td>Tenant audit & document store connection</td></tr>
+                  <tr><td class="param-name">Redis</td><td>Streams & cache connectivity for <code>cg_wallets</code> / <code>cg.fiat</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>GET /health/ready</span></div>
+                    <pre><code>GET /health/ready HTTP/1.1
+Host: {{base_url}}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-200">200 OK</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>text/plain</span></div>
+                    <pre><code>ok</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X GET "http://localhost:8080/health/ready"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== 2. CUSTOMERS =================== -->
+        <div class="category-group-header" data-cat="customers">
+          <span class="category-badge">Customer Management</span>
+          <span class="category-line"></span>
+        </div>
+
+        <!-- 2.1 Create Customer -->
+        <div class="endpoint-card" data-cat="customers" data-flow="customers" id="ep-create-customer">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-POST">POST</span>
+              <span class="endpoint-path">/v1/customers</span>
+              <span class="endpoint-name">Create Customer</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-create-customer')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">⚡</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Asynchronous Address Derivation</div>
+              <div class="next-move-text">
+                1. Capture <code>response.id</code> and save as <code>customer_id</code> in your environment.<br/>
+                2. The server creates the customer with <code>wallets: "provisioning"</code> and emits a Redis Streams event to <code>cg_wallets</code>.<br/>
+                3. <strong>WAIT 2–3 SECONDS</strong>, then call <code>GET /v1/customers/{{customer_id}}/addresses</code> to retrieve the generated crypto addresses.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.1. Creates an end-customer identity under the authenticated business tenant. Triggers outbox queue for HD wallet derivation across Bitcoin, Ethereum, Binance Smart Chain, and TRON.
+              </p>
+              <table class="params-table">
+                <thead>
+                  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="param-name">external_id <span class="param-badge">REQUIRED</span></td>
+                    <td class="param-type">string</td>
+                    <td>Your system's unique user identifier (e.g. <code>postman-customer-1</code>).</td>
+                  </tr>
+                  <tr>
+                    <td class="param-name">name</td>
+                    <td class="param-type">string</td>
+                    <td>Optional customer display name.</td>
+                  </tr>
+                  <tr>
+                    <td class="param-name">email</td>
+                    <td class="param-type">string</td>
+                    <td>Optional customer email.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header">
+                      <span>application/json</span>
+                      <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                    </div>
+                    <pre><code>{
+  <span class="token-key">"external_id"</span>: <span class="token-string">"postman-customer-1"</span>,
+  <span class="token-key">"name"</span>: <span class="token-string">"Jane Doe"</span>,
+  <span class="token-key">"email"</span>: <span class="token-string">"jane@example.com"</span>
+}</code></pre>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-201">201 Created</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header">
+                      <span>application/json</span>
+                      <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                    </div>
+                    <pre><code>{
+  <span class="token-key">"id"</span>: <span class="token-string">"cust_01HX9J1234ABCD5678EFGH"</span>,
+  <span class="token-key">"external_id"</span>: <span class="token-string">"postman-customer-1"</span>,
+  <span class="token-key">"status"</span>: <span class="token-string">"active"</span>,
+  <span class="token-key">"wallets"</span>: <span class="token-string">"provisioning"</span>,
+  <span class="token-key">"created_at"</span>: <span class="token-string">"2026-09-19T12:00:00Z"</span>
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X POST "http://localhost:8080/v1/customers" \
+  -H "Authorization: Bearer {{sk_key}}" \
+  -H "Content-Type: application/json" \
+  -d '{"external_id": "postman-customer-1"}'</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2.2 List Addresses -->
+        <div class="endpoint-card" data-cat="customers" data-flow="customers" id="ep-list-addresses">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/v1/customers/:customer_id/addresses</span>
+              <span class="endpoint-name">List Customer Crypto Addresses</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-list-addresses')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">🚀</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Receive Funds or Create Fiat Intent</div>
+              <div class="next-move-text">
+                • If the returned array has 4 entries (<code>bitcoin</code>, <code>ethereum</code>, <code>bsc</code>, <code>tron</code>), addresses are ready to display to customers for crypto deposits.<br/>
+                • <em>Note:</em> <code>bsc</code> intentionally shares Ethereum's address by EVM design (Doc 11 §1).<br/>
+                • Next move: Call <strong>Fiat Deposit Intents > Create Deposit Intent</strong> to test NGN virtual account generation.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.1. Returns all derived blockchain addresses for this customer. If this returns an empty list <code>[]</code>, the <code>cg_wallets</code> consumer is still processing the derivation; retry after 1-2 seconds.
+              </p>
+              <div class="alert-box">
+                ℹ️ <strong>EVM Address Unification:</strong> Ethereum and Binance Smart Chain use identical secp256k1 derivation schemes, so their deposit addresses match.
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>GET /v1/customers/{{customer_id}}/addresses</span></div>
+                    <pre><code>GET /v1/customers/cust_01HX9J1234ABCD5678EFGH/addresses HTTP/1.1
+Host: {{base_url}}
+Authorization: Bearer {{sk_key}}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-200">200 OK</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>[
+  {
+    <span class="token-key">"chain"</span>: <span class="token-string">"bitcoin"</span>,
+    <span class="token-key">"address"</span>: <span class="token-string">"bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"</span>
+  },
+  {
+    <span class="token-key">"chain"</span>: <span class="token-string">"ethereum"</span>,
+    <span class="token-key">"address"</span>: <span class="token-string">"0x71C8366453AB58359d9c22822793844d90Ee6742"</span>
+  },
+  {
+    <span class="token-key">"chain"</span>: <span class="token-string">"bsc"</span>,
+    <span class="token-key">"address"</span>: <span class="token-string">"0x71C8366453AB58359d9c22822793844d90Ee6742"</span>
+  },
+  {
+    <span class="token-key">"chain"</span>: <span class="token-string">"tron"</span>,
+    <span class="token-key">"address"</span>: <span class="token-string">"TYukBQZ2XXCcRCxsmz1kh2hssdsKxsjKSv"</span>
+  }
+]</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X GET "http://localhost:8080/v1/customers/{{customer_id}}/addresses" \
+  -H "Authorization: Bearer {{sk_key}}"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== 3. FIAT DEPOSIT INTENTS =================== -->
+        <div class="category-group-header" data-cat="fiat">
+          <span class="category-badge">Fiat Deposit Intents (NGN)</span>
+          <span class="category-line"></span>
+        </div>
+
+        <!-- 3.1 Create Fiat Deposit Intent -->
+        <div class="endpoint-card" data-cat="fiat" data-flow="fiat" id="ep-create-deposit-intent">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-POST">POST</span>
+              <span class="endpoint-path">/v1/customers/:customer_id/fiat-deposit-intents</span>
+              <span class="endpoint-name">Create Fiat Deposit Intent</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-create-deposit-intent')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">⚡</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Virtual Account Provisioning</div>
+              <div class="next-move-text">
+                1. Save <code>response.id</code> into <code>fiat_deposit_intent_id</code>.<br/>
+                2. Notice that <code>va</code> is initially <code>null</code>. The consumer <code>cg.fiat</code> contacts Lenco asynchronously to provision the dynamic virtual account.<br/>
+                3. Call <strong>Get Deposit Intent</strong> after 1–2 seconds to fetch the generated bank name, account number, and expiration timer.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.3, Doc 10 §2. Initiates an NGN bank transfer intent. `amount` is in minor units (kobo): <code>500000</code> = ₦5,000.00.
+              </p>
+              <table class="params-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Options</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="param-name">amount <span class="param-badge">REQUIRED</span></td>
+                    <td class="param-type">string</td>
+                    <td>Integer in string format</td>
+                    <td>Minor units (kobo). Example: <code>"500000"</code> is ₦5,000.00.</td>
+                  </tr>
+                  <tr>
+                    <td class="param-name">amount_mode</td>
+                    <td class="param-type">string</td>
+                    <td><code>fixed</code> | <code>minimum</code> | <code>open</code></td>
+                    <td>Default is <code>fixed</code>. Enforces strict underpaid/overpaid intent checks.</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="alert-box warning">
+                ⚠️ <strong>Provider Requirement:</strong> Real virtual account generation requires <code>LENCO_API_TOKEN</code> and <code>LENCO_ACCOUNT_UUID</code> in your local environment. Without them, the intent remains in <code>pending</code> status.
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"amount"</span>: <span class="token-string">"500000"</span>,
+  <span class="token-key">"amount_mode"</span>: <span class="token-string">"fixed"</span>
+}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-201">201 Created</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"id"</span>: <span class="token-string">"fdi_01HX9J9876ZYXW5432VUTS"</span>,
+  <span class="token-key">"customer_id"</span>: <span class="token-string">"cust_01HX9J1234ABCD5678EFGH"</span>,
+  <span class="token-key">"status"</span>: <span class="token-string">"pending"</span>,
+  <span class="token-key">"expected_amount"</span>: <span class="token-string">"500000"</span>,
+  <span class="token-key">"amount_received"</span>: <span class="token-string">"0"</span>,
+  <span class="token-key">"amount_mode"</span>: <span class="token-string">"fixed"</span>,
+  <span class="token-key">"expires_at"</span>: <span class="token-string">"2026-09-19T14:15:00Z"</span>,
+  <span class="token-key">"va"</span>: <span class="token-null">null</span>
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X POST "http://localhost:8080/v1/customers/{{customer_id}}/fiat-deposit-intents" \
+  -H "Authorization: Bearer {{sk_key}}" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": "500000", "amount_mode": "fixed"}'</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3.2 Get Fiat Deposit Intent -->
+        <div class="endpoint-card" data-cat="fiat" data-flow="fiat" id="ep-get-deposit-intent">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/v1/fiat-deposit-intents/:fiat_deposit_intent_id</span>
+              <span class="endpoint-name">Get Deposit Intent & Account Details</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-get-deposit-intent')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">🚀</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Monitor Status Progression</div>
+              <div class="next-move-text">
+                • Status lifecycle: <code>pending</code> ➔ <code>ready</code> (virtual account active) ➔ <code>fulfilled</code> (inbound funds credited to ledger).<br/>
+                • If customer underpays in fixed mode, status moves to <code>underpaid</code>.<br/>
+                • Once deposits are verified, proceed to <strong>Bank Utilities > List Banks & Resolve</strong> to prepare outbound payouts.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.3. Retrieves intent status and populated virtual account details. Status values: <code>pending | ready | fulfilled | underpaid | expired | failed</code>.
+              </p>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>GET /v1/fiat-deposit-intents/{{fiat_deposit_intent_id}}</span></div>
+                    <pre><code>GET /v1/fiat-deposit-intents/fdi_01HX9J9876ZYXW5432VUTS HTTP/1.1
+Host: {{base_url}}
+Authorization: Bearer {{sk_key}}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response (Ready State)</span>
+                    <span class="status-badge status-200">200 OK</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"id"</span>: <span class="token-string">"fdi_01HX9J9876ZYXW5432VUTS"</span>,
+  <span class="token-key">"customer_id"</span>: <span class="token-string">"cust_01HX9J1234ABCD5678EFGH"</span>,
+  <span class="token-key">"status"</span>: <span class="token-string">"ready"</span>,
+  <span class="token-key">"expected_amount"</span>: <span class="token-string">"500000"</span>,
+  <span class="token-key">"amount_received"</span>: <span class="token-string">"0"</span>,
+  <span class="token-key">"expires_at"</span>: <span class="token-string">"2026-09-19T14:15:00Z"</span>,
+  <span class="token-key">"va"</span>: {
+    <span class="token-key">"bank_name"</span>: <span class="token-string">"Wema Bank / Lenco"</span>,
+    <span class="token-key">"bank_code"</span>: <span class="token-string">"035"</span>,
+    <span class="token-key">"account_number"</span>: <span class="token-string">"9901234567"</span>,
+    <span class="token-key">"account_name"</span>: <span class="token-string">"FLUXEL-TEST-CUST"</span>
+  }
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X GET "http://localhost:8080/v1/fiat-deposit-intents/{{fiat_deposit_intent_id}}" \
+  -H "Authorization: Bearer {{sk_key}}"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== 4. BANK UTILITIES =================== -->
+        <div class="category-group-header" data-cat="banks">
+          <span class="category-badge">Bank Utilities & Account Resolution</span>
+          <span class="category-line"></span>
+        </div>
+
+        <!-- 4.1 List Banks -->
+        <div class="endpoint-card" data-cat="banks" data-flow="banks" id="ep-list-banks">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/v1/banks</span>
+              <span class="endpoint-name">List Supported Commercial & Digital Banks</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-list-banks')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">🚀</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Select Bank Code</div>
+              <div class="next-move-text">
+                Pick the destination bank's 3-digit code (e.g. <code>"044"</code> for Access Bank, <code>"058"</code> for GTBank). Pass this code directly into <strong>Resolve Bank Account</strong>.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.6. Fetches Nigerian financial institutions from the provider. Result is cached in-memory (<code>banks_cache</code> in <code>LencoProvider</code>) to minimize external roundtrips.
+              </p>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>GET /v1/banks</span></div>
+                    <pre><code>GET /v1/banks HTTP/1.1
+Host: {{base_url}}
+Authorization: Bearer {{sk_key}}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-200">200 OK</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>[
+  { <span class="token-key">"code"</span>: <span class="token-string">"044"</span>, <span class="token-key">"name"</span>: <span class="token-string">"Access Bank"</span> },
+  { <span class="token-key">"code"</span>: <span class="token-string">"058"</span>, <span class="token-key">"name"</span>: <span class="token-string">"Guaranty Trust Bank"</span> },
+  { <span class="token-key">"code"</span>: <span class="token-string">"011"</span>, <span class="token-key">"name"</span>: <span class="token-string">"First Bank of Nigeria"</span> },
+  { <span class="token-key">"code"</span>: <span class="token-string">"057"</span>, <span class="token-key">"name"</span>: <span class="token-string">"Zenith Bank"</span> },
+  { <span class="token-key">"code"</span>: <span class="token-string">"035"</span>, <span class="token-key">"name"</span>: <span class="token-string">"Wema Bank"</span> }
+]</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X GET "http://localhost:8080/v1/banks" \
+  -H "Authorization: Bearer {{sk_key}}"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4.2 Resolve Bank Account -->
+        <div class="endpoint-card" data-cat="banks" data-flow="banks" id="ep-resolve-bank">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-POST">POST</span>
+              <span class="endpoint-path">/v1/bank-accounts/resolve</span>
+              <span class="endpoint-name">Resolve Bank Account (Name Enquiry)</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-resolve-bank')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">⚡</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Exact Name Matching Requirement</div>
+              <div class="next-move-text">
+                The returned <code>account_name</code> <strong>MUST MATCH EXACTLY</strong> what you submit in <code>POST /v1/payouts</code>. If there is a mismatch, the Payout endpoint will strictly fail with <code>422 name_mismatch</code> (Doc 1 §8.6 step 1).
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.6. Performs real-time NIBSS/Lenco name enquiry on a 10-digit NUBAN account number.
+              </p>
+              <table class="params-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Example</th></tr></thead>
+                <tbody>
+                  <tr><td class="param-name">bank_code</td><td>string</td><td><code>"044"</code></td></tr>
+                  <tr><td class="param-name">account_number</td><td>string</td><td><code>"0123456789"</code> (10 digits)</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"bank_code"</span>: <span class="token-string">"044"</span>,
+  <span class="token-key">"account_number"</span>: <span class="token-string">"0123456789"</span>
+}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-200">200 OK</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"account_name"</span>: <span class="token-string">"Jane Oluwaseun Doe"</span>,
+  <span class="token-key">"account_number"</span>: <span class="token-string">"0123456789"</span>,
+  <span class="token-key">"bank_code"</span>: <span class="token-string">"044"</span>
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X POST "http://localhost:8080/v1/bank-accounts/resolve" \
+  -H "Authorization: Bearer {{sk_key}}" \
+  -H "Content-Type: application/json" \
+  -d '{"bank_code": "044", "account_number": "0123456789"}'</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== 5. PAYOUTS =================== -->
+        <div class="category-group-header" data-cat="payouts">
+          <span class="category-badge">Outbound Fiat Payouts</span>
+          <span class="category-line"></span>
+        </div>
+
+        <!-- 5.1 Create Payout -->
+        <div class="endpoint-card" data-cat="payouts" data-flow="payouts" id="ep-create-payout">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-POST">POST</span>
+              <span class="endpoint-path">/v1/payouts</span>
+              <span class="endpoint-name">Create Outbound Fiat Payout</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-create-payout')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">⚡</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Store Payout ID & Poll Execution</div>
+              <div class="next-move-text">
+                1. Save <code>response.id</code> into <code>payout_id</code>.<br/>
+                2. Fluxel immediately runs an internal name-enquiry verification check.<br/>
+                3. Call <strong>Get Payout</strong> (<code>GET /v1/payouts/{{payout_id}}</code>) to track state changes from <code>requested</code> ➔ <code>executing</code> ➔ <code>completed</code>.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.4, Doc 10 §4. Dispatches NGN funds to an external commercial bank account. <code>customer_id</code> is optional; if omitted, the payout is considered business-treasury initiated.
+              </p>
+              <div class="alert-box warning">
+                ⚠️ <strong>Name Mismatch Guard:</strong> <code>account_name</code> must match what Lenco resolves for <code>bank_code</code> / <code>account_number</code>. A mismatch returns <code>422 name_mismatch</code>.
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"amount"</span>: <span class="token-string">"500000"</span>,
+  <span class="token-key">"bank_code"</span>: <span class="token-string">"044"</span>,
+  <span class="token-key">"account_number"</span>: <span class="token-string">"0123456789"</span>,
+  <span class="token-key">"account_name"</span>: <span class="token-string">"Jane Oluwaseun Doe"</span>,
+  <span class="token-key">"customer_id"</span>: <span class="token-string">"{{customer_id}}"</span>
+}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-201">201 Created</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"id"</span>: <span class="token-string">"po_01HX9PAYOUT1234567890"</span>,
+  <span class="token-key">"status"</span>: <span class="token-string">"requested"</span>,
+  <span class="token-key">"amount"</span>: <span class="token-string">"500000"</span>,
+  <span class="token-key">"destination"</span>: {
+    <span class="token-key">"bank_code"</span>: <span class="token-string">"044"</span>,
+    <span class="token-key">"account_number"</span>: <span class="token-string">"0123456789"</span>,
+    <span class="token-key">"account_name"</span>: <span class="token-string">"Jane Oluwaseun Doe"</span>
+  },
+  <span class="token-key">"created_at"</span>: <span class="token-string">"2026-09-19T12:30:00Z"</span>
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X POST "http://localhost:8080/v1/payouts" \
+  -H "Authorization: Bearer {{sk_key}}" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": "500000", "bank_code": "044", "account_number": "0123456789", "account_name": "Jane Oluwaseun Doe", "customer_id": "{{customer_id}}"}'</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5.2 Get Payout -->
+        <div class="endpoint-card" data-cat="payouts" data-flow="payouts" id="ep-get-payout">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/v1/payouts/:payout_id</span>
+              <span class="endpoint-name">Get Payout Status</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-get-payout')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">🚀</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Verify Settlement State</div>
+              <div class="next-move-text">
+                Possible statuses: <code>requested | held | approved | executing | completed | failed | rejected | uncertain | reversed</code>.<br/>
+                If status is <code>held</code>, staff approval in the internal ops console is required before transition to <code>executing</code>.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">Doc 5 §2.4. Queries payout state and settlement outcome.</p>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>GET /v1/payouts/{{payout_id}}</span></div>
+                    <pre><code>GET /v1/payouts/po_01HX9PAYOUT1234567890 HTTP/1.1
+Host: {{base_url}}
+Authorization: Bearer {{sk_key}}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-200">200 OK</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"id"</span>: <span class="token-string">"po_01HX9PAYOUT1234567890"</span>,
+  <span class="token-key">"status"</span>: <span class="token-string">"completed"</span>,
+  <span class="token-key">"amount"</span>: <span class="token-string">"500000"</span>,
+  <span class="token-key">"destination"</span>: {
+    <span class="token-key">"bank_code"</span>: <span class="token-string">"044"</span>,
+    <span class="token-key">"account_number"</span>: <span class="token-string">"0123456789"</span>,
+    <span class="token-key">"account_name"</span>: <span class="token-string">"Jane Oluwaseun Doe"</span>
+  }
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X GET "http://localhost:8080/v1/payouts/{{payout_id}}" \
+  -H "Authorization: Bearer {{sk_key}}"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== 6. CRYPTO WITHDRAWALS =================== -->
+        <div class="category-group-header" data-cat="crypto">
+          <span class="category-badge">Crypto Withdrawals</span>
+          <span class="category-line"></span>
+        </div>
+
+        <!-- 6.1 Create Crypto Withdrawal -->
+        <div class="endpoint-card" data-cat="crypto" data-flow="crypto" id="ep-create-crypto-withdrawal">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-POST">POST</span>
+              <span class="endpoint-path">/v1/crypto-withdrawals</span>
+              <span class="endpoint-name">Initiate Crypto On-Chain Withdrawal</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-create-crypto-withdrawal')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">⚡</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Store Withdrawal ID & Monitor Node Broadcast</div>
+              <div class="next-move-text">
+                1. Store <code>response.id</code> into <code>crypto_withdrawal_id</code>.<br/>
+                2. Fluxel validates destination format via <code>crypto::is_valid_address</code>.<br/>
+                3. The withdrawal executor confirms sufficient balance, constructs the raw transaction, and broadcasts to Alchemy/TronGrid.<br/>
+                4. Call <strong>Get Crypto Withdrawal</strong> to receive the confirmed <code>txid</code> and <code>network_fee</code>.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.4, Doc 1 §8.7. Transfers digital assets on-chain. Supported chains: <code>bitcoin | ethereum | bsc | tron</code>. Amounts are in minor units: <code>wei</code> for ETH/BSC, <code>sat</code> for BTC, <code>sun</code> for TRON.
+              </p>
+              <div class="alert-box">
+                🛡️ <strong>Internal Address Guard:</strong> If <code>destination_address</code> belongs to Fluxel, the API rejects it with <code>422 internal_transfer_unavailable</code> to safeguard gas fees.
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"customer_id"</span>: <span class="token-string">"{{customer_id}}"</span>,
+  <span class="token-key">"chain"</span>: <span class="token-string">"ethereum"</span>,
+  <span class="token-key">"asset_code"</span>: <span class="token-string">"ETH"</span>,
+  <span class="token-key">"amount"</span>: <span class="token-string">"1000000000000000"</span>,
+  <span class="token-key">"destination_address"</span>: <span class="token-string">"0x000000000000000000000000000000000000dEaD"</span>
+}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-201">201 Created</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"id"</span>: <span class="token-string">"cw_01HX9CW1234567890ABCDEF"</span>,
+  <span class="token-key">"status"</span>: <span class="token-string">"processing"</span>,
+  <span class="token-key">"chain"</span>: <span class="token-string">"ethereum"</span>,
+  <span class="token-key">"asset_code"</span>: <span class="token-string">"ETH"</span>,
+  <span class="token-key">"amount"</span>: <span class="token-string">"1000000000000000"</span>,
+  <span class="token-key">"fee"</span>: <span class="token-string">"50000000000000"</span>,
+  <span class="token-key">"destination_address"</span>: <span class="token-string">"0x000000000000000000000000000000000000dEaD"</span>,
+  <span class="token-key">"txid"</span>: <span class="token-null">null</span>,
+  <span class="token-key">"network_fee"</span>: <span class="token-null">null</span>
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X POST "http://localhost:8080/v1/crypto-withdrawals" \
+  -H "Authorization: Bearer {{sk_key}}" \
+  -H "Content-Type: application/json" \
+  -d '{"customer_id": "{{customer_id}}", "chain": "ethereum", "asset_code": "ETH", "amount": "1000000000000000", "destination_address": "0x000000000000000000000000000000000000dEaD"}'</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6.2 Get Crypto Withdrawal -->
+        <div class="endpoint-card" data-cat="crypto" data-flow="crypto" id="ep-get-crypto-withdrawal">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/v1/crypto-withdrawals/:crypto_withdrawal_id</span>
+              <span class="endpoint-name">Get Crypto Withdrawal Status & TxID</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-get-crypto-withdrawal')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">🚀</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Extract Blockchain Tx Hash</div>
+              <div class="next-move-text">
+                Once status moves from <code>processing</code> ➔ <code>broadcast</code> ➔ <code>confirmed</code>, <code>txid</code> contains the immutable on-chain transaction hash. Provide this to the customer for public block explorer verification.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.4. Returns transaction lifecycle data. Status values: <code>processing | pending_review | broadcast | confirmed | failed | rerouted_internal</code>.
+              </p>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>GET /v1/crypto-withdrawals/{{crypto_withdrawal_id}}</span></div>
+                    <pre><code>GET /v1/crypto-withdrawals/cw_01HX9CW1234567890ABCDEF HTTP/1.1
+Host: {{base_url}}
+Authorization: Bearer {{sk_key}}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response (Confirmed)</span>
+                    <span class="status-badge status-200">200 OK</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"id"</span>: <span class="token-string">"cw_01HX9CW1234567890ABCDEF"</span>,
+  <span class="token-key">"status"</span>: <span class="token-string">"confirmed"</span>,
+  <span class="token-key">"chain"</span>: <span class="token-string">"ethereum"</span>,
+  <span class="token-key">"asset_code"</span>: <span class="token-string">"ETH"</span>,
+  <span class="token-key">"amount"</span>: <span class="token-string">"1000000000000000"</span>,
+  <span class="token-key">"fee"</span>: <span class="token-string">"50000000000000"</span>,
+  <span class="token-key">"destination_address"</span>: <span class="token-string">"0x000000000000000000000000000000000000dEaD"</span>,
+  <span class="token-key">"txid"</span>: <span class="token-string">"0x8f4c529fa83f06da5d87cb751fbbcf9d249f05ec61793739faae2114757e8499"</span>,
+  <span class="token-key">"network_fee"</span>: <span class="token-string">"21000000000000"</span>
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X GET "http://localhost:8080/v1/crypto-withdrawals/{{crypto_withdrawal_id}}" \
+  -H "Authorization: Bearer {{sk_key}}"</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== 7. WEBHOOKS =================== -->
+        <div class="category-group-header" data-cat="webhooks">
+          <span class="category-badge">Webhooks & Event Deliveries</span>
+          <span class="category-line"></span>
+        </div>
+
+        <!-- 7.1 Register Webhook Endpoint -->
+        <div class="endpoint-card" data-cat="webhooks" data-flow="webhooks" id="ep-register-webhook">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-POST">POST</span>
+              <span class="endpoint-path">/v1/webhook-endpoints</span>
+              <span class="endpoint-name">Register Webhook Endpoint</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+              <button class="btn btn-ghost" onclick="copyCurl('ep-register-webhook')">📋 Copy cURL</button>
+            </div>
+          </div>
+
+          <div class="next-move-banner">
+            <div class="next-move-icon">⚡</div>
+            <div class="next-move-content">
+              <div class="next-move-heading">Next Move: Save Secret Key & Configure Host Address</div>
+              <div class="next-move-text">
+                1. <strong>SAVE THE SECRET IMMEDIATELY:</strong> The <code>secret</code> is displayed once and cannot be retrieved again.<br/>
+                2. If testing locally on your host machine while Fluxel runs in Docker, use <code>http://host.docker.internal:18080/</code> so the worker container can reach your host receiver (avoiding the container localhost trap).<br/>
+                3. Use the secret to verify the HMAC SHA-256 signature in incoming header <code>X-Fluxel-Signature</code>.
+              </div>
+            </div>
+          </div>
+
+          <div class="endpoint-body">
+            <div class="tabs-nav">
+              <button class="tab-btn active" onclick="switchTab(this, 'overview')">Overview</button>
+              <button class="tab-btn" onclick="switchTab(this, 'req-res')">Request & Response</button>
+              <button class="tab-btn" onclick="switchTab(this, 'curl')">cURL Command</button>
+            </div>
+
+            <div class="tab-content active" data-tab="overview">
+              <p style="color: var(--text-muted); margin-bottom: 12px;">
+                Doc 5 §2.7, Doc 7 §3. Subscribes your server to real-time asynchronous platform events such as <code>customer.wallets.ready</code>.
+              </p>
+              <table class="params-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr><td class="param-name">url <span class="param-badge">REQUIRED</span></td><td>string</td><td>Outbound HTTP destination URL.</td></tr>
+                  <tr><td class="param-name">events <span class="param-badge">REQUIRED</span></td><td>array of strings</td><td>Events subscribed to (e.g. <code>["customer.wallets.ready"]</code>).</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="tab-content" data-tab="req-res">
+              <div class="req-res-grid">
+                <div>
+                  <div class="pane-header"><span class="pane-title">HTTP Request</span></div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"url"</span>: <span class="token-string">"http://host.docker.internal:18080/"</span>,
+  <span class="token-key">"events"</span>: [
+    <span class="token-string">"customer.wallets.ready"</span>
+  ]
+}</code></pre>
+                  </div>
+                </div>
+                <div>
+                  <div class="pane-header">
+                    <span class="pane-title">HTTP Response</span>
+                    <span class="status-badge status-201">201 Created</span>
+                  </div>
+                  <div class="code-box">
+                    <div class="code-box-header"><span>application/json</span></div>
+                    <pre><code>{
+  <span class="token-key">"id"</span>: <span class="token-string">"we_01HX9WE9876543210ZYXWV"</span>,
+  <span class="token-key">"url"</span>: <span class="token-string">"http://host.docker.internal:18080/"</span>,
+  <span class="token-key">"events"</span>: [<span class="token-string">"customer.wallets.ready"</span>],
+  <span class="token-key">"secret"</span>: <span class="token-string">"whsec_9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b"</span>
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-content" data-tab="curl">
+              <div class="code-box">
+                <div class="code-box-header">
+                  <span>cURL</span>
+                  <button class="copy-btn" onclick="copySnippet(this)">Copy</button>
+                </div>
+                <pre><code>curl -X POST "http://localhost:8080/v1/webhook-endpoints" \
+  -H "Authorization: Bearer {{sk_key}}" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "http://host.docker.internal:18080/", "events": ["customer.wallets.ready"]}'</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =================== 8. SCAFFOLD & CALLBACKS =================== -->
+        <div class="category-group-header" data-cat="scaffold">
+          <span class="category-badge">Scaffold Markers & Inbound Callbacks</span>
+          <span class="category-line"></span>
+        </div>
+
+        <!-- 8.1 v1 Scaffold -->
+        <div class="endpoint-card" data-cat="scaffold" data-flow="all" id="ep-scaffold-v1">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/v1/</span>
+              <span class="endpoint-name">v1 Router & Auth Pipeline Scaffold Marker</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+            </div>
+          </div>
+          <div class="endpoint-body">
+            <p style="color: var(--text-muted); margin-bottom: 12px;">Confirms the v1 router and tenant middleware pipeline is reachable.</p>
+            <div class="code-box">
+              <div class="code-box-header"><span>Response (200 OK)</span></div>
+              <pre><code>{
+  <span class="token-key">"status"</span>: <span class="token-string">"scaffold"</span>,
+  <span class="token-key">"doc"</span>: <span class="token-string">"Doc 5 — REST API Specification v1"</span>
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8.2 Dashboard Scaffold -->
+        <div class="endpoint-card" data-cat="scaffold" data-flow="all" id="ep-scaffold-dash">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/dashboard/</span>
+              <span class="endpoint-name">Dashboard API Scaffold Marker</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+            </div>
+          </div>
+          <div class="endpoint-body">
+            <p style="color: var(--text-muted);">Dashboard API is unbuilt in the local Rust stack (Doc 16 P3). Returns confirmation marker.</p>
+          </div>
+        </div>
+
+        <!-- 8.3 Admin Scaffold -->
+        <div class="endpoint-card" data-cat="scaffold" data-flow="all" id="ep-scaffold-admin">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-GET">GET</span>
+              <span class="endpoint-path">/admin/</span>
+              <span class="endpoint-name">Admin Console Scaffold Marker</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge">Bearer {{sk_key}}</span>
+            </div>
+          </div>
+          <div class="endpoint-body">
+            <p style="color: var(--text-muted);">Admin console API is unbuilt. Business creation & approvals are handled via <code>xtask bootstrap-test-business</code>.</p>
+          </div>
+        </div>
+
+        <!-- 8.4 Inbound Lenco Callback -->
+        <div class="endpoint-card" data-cat="scaffold" data-flow="all" id="ep-lenco-callback">
+          <div class="endpoint-header">
+            <div class="endpoint-identity">
+              <span class="method-badge method-POST">POST</span>
+              <span class="endpoint-path">/callbacks/lenco</span>
+              <span class="endpoint-name">Inbound Provider Callback (Lenco)</span>
+            </div>
+            <div class="endpoint-badges">
+              <span class="auth-badge noauth">HMAC Header Required</span>
+            </div>
+          </div>
+          <div class="endpoint-body">
+            <div class="alert-box warning">
+              ⚠️ <strong>Reference Only:</strong> This endpoint is invoked by Lenco to notify Fluxel of virtual account settlements. Without a valid <code>X-Lenco-Signature</code> HMAC header, it returns <code>401 Unauthorized</code>.
+            </div>
+            <div class="code-box" style="margin-top: 14px;">
+              <div class="code-box-header"><span>Sample Payload</span></div>
+              <pre><code>{
+  <span class="token-key">"event"</span>: <span class="token-string">"deposit.settled"</span>,
+  <span class="token-key">"data"</span>: {
+    <span class="token-key">"account_number"</span>: <span class="token-string">"9901234567"</span>,
+    <span class="token-key">"amount"</span>: <span class="token-number">500000</span>
+  }
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer>
+      Fluxel Financial Technologies &bull; Local Crypto/Fiat API Architecture Specification &bull; Postman v2.1.0 Collection Companion
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Copied to clipboard!</div>
+
+  </div>
+
+  <script>
+    // Tab Switching
+    function switchTab(btn, tabName) {
+      const parent = btn.closest('.endpoint-body');
+      const buttons = parent.querySelectorAll('.tab-btn');
+      const contents = parent.querySelectorAll('.tab-content');
+
+      buttons.forEach(b => b.classList.remove('active'));
+      contents.forEach(c => c.classList.remove('active'));
+
+      btn.classList.add('active');
+      const target = parent.querySelector(`.tab-content[data-tab="${tabName}"]`);
+      if (target) target.classList.add('active');
+    }
+
+    // Copy to clipboard with toast
+    function copySnippet(btn) {
+      const box = btn.closest('.code-box');
+      const code = box.querySelector('code').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        showToast('Copied to clipboard!');
+      });
+    }
+
+    function copyCurl(cardId) {
+      const card = document.getElementById(cardId);
+      const curlTab = card.querySelector('.tab-content[data-tab="curl"] code');
+      if (curlTab) {
+        navigator.clipboard.writeText(curlTab.innerText).then(() => {
+          showToast('cURL copied to clipboard!');
+        });
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2000);
+    }
+
+    // Category Filter
+    function setCategoryFilter(cat, btn) {
+      const buttons = document.querySelectorAll('.filter-tag');
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const cards = document.querySelectorAll('.endpoint-card');
+      const headers = document.querySelectorAll('.category-group-header');
+
+      cards.forEach(card => {
+        if (cat === 'all' || card.getAttribute('data-cat') === cat) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      headers.forEach(h => {
+        if (cat === 'all' || h.getAttribute('data-cat') === cat) {
+          h.style.display = 'flex';
+        } else {
+          h.style.display = 'none';
+        }
+      });
+    }
+
+    // Flow Stepper Filter
+    function filterFlow(flow, card) {
+      const stepCards = document.querySelectorAll('.flow-step-card');
+      stepCards.forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+
+      const cards = document.querySelectorAll('.endpoint-card');
+      const headers = document.querySelectorAll('.category-group-header');
+
+      if (flow === 'all') {
+        cards.forEach(c => c.style.display = 'block');
+        headers.forEach(h => h.style.display = 'flex');
+        return;
+      }
+
+      cards.forEach(c => {
+        if (c.getAttribute('data-flow') === flow) {
+          c.style.display = 'block';
+        } else {
+          c.style.display = 'none';
+        }
+      });
+
+      headers.forEach(h => {
+        if (h.getAttribute('data-cat') === flow) {
+          h.style.display = 'flex';
+        } else {
+          h.style.display = 'none';
+        }
+      });
+    }
+
+    // Search filter
+    function searchEndpoints() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      const cards = document.querySelectorAll('.endpoint-card');
+      const headers = document.querySelectorAll('.category-group-header');
+
+      cards.forEach(card => {
+        const text = card.innerText.toLowerCase();
+        if (!q || text.includes(q)) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      headers.forEach(h => {
+        if (!q) {
+          h.style.display = 'flex';
+        } else {
+          h.style.display = 'none';
+        }
+      });
+    }
+
+    // Expand / Collapse All Tabs
+    function expandAll(toReqRes) {
+      const cards = document.querySelectorAll('.endpoint-card');
+      cards.forEach(card => {
+        const tabBtn = card.querySelector(`.tab-btn[onclick*="${toReqRes ? 'req-res' : 'overview'}"]`);
+        if (tabBtn) tabBtn.click();
+      });
+    }
+
+    // Dark / Light Theme
+    function toggleTheme() {
+      const body = document.documentElement;
+      const current = body.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      body.setAttribute('data-theme', next);
+      document.getElementById('themeBtn').innerText = next === 'dark' ? '🌙 Theme' : '☀️ Theme';
+    }
+  </script>
+</body>
+</html>
