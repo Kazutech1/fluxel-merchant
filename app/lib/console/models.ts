@@ -24,6 +24,9 @@ export interface Asset {
 export interface Balance {
   asset_code: string;
   available: string;
+  /** Seen on-chain but not yet credited. Customer balances carry it; the business list may not. */
+  pending?: string;
+  total?: string;
 }
 
 /** `/v1/transactions` and `/v1/deposits` rows. */

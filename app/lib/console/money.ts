@@ -53,6 +53,13 @@ export function toMinor(input: string, decimals: number): string | null {
   return digits === '0' ? null : digits;
 }
 
+/** Adds minor-unit strings exactly. 18-decimal amounts overflow a float long before they look big. */
+export function sumMinor(values: (string | null | undefined)[]): string {
+  let total = BigInt(0);
+  for (const v of values) if (v && /^\d+$/.test(v)) total += BigInt(v);
+  return total.toString();
+}
+
 const ngn = new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat('en-NG', { notation: 'compact', maximumFractionDigits: 1 });
 

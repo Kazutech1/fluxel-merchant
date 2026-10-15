@@ -3,10 +3,10 @@
 import React, { useMemo } from 'react';
 import { ArrowRight, ArrowUpRight, BadgeCheck, Link2, UserPlus } from 'lucide-react';
 
-import { useAssets, useBalances, useCustomers, useDisputes, useSettlementSummary, useStaticAccount, useTransactions } from '../../lib/console/data';
+import { useAssets, useBalances, useCustomerBalanceTotals, useCustomers, useDisputes, useSettlementSummary, useStaticAccount, useTransactions } from '../../lib/console/data';
 import { DAY_MS, startOfDay } from '../../lib/console/format';
 import { decimalsFor, formatMajor, toMajor } from '../../lib/console/money';
-import type { AssetTotal } from '../../lib/console/models';
+import type { Asset, AssetTotal, Balance } from '../../lib/console/models';
 import { useNow } from '../../lib/console/useNow';
 import { can } from '../../lib/permissions';
 import BarChart from './BarChart';
@@ -28,6 +28,34 @@ function greeting(): string {
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 }
 
+function nonZeroCrypto(rows: Balance[] | undefined): Balance[] {
+  return (rows ?? []).filter((b) => b.asset_code !== 'NGN' && (Number(b.available) > 0 || Number(b.pending ?? 0) > 0));
+}
+
+function CryptoRows({ title, rows, assets }: { title: string; rows: Balance[]; assets?: Asset[] }) {
+  return (
+    <>
+      <p className="px-5 pt-3 pb-1 text-xs font-medium text-ink-3">{title}</p>
+      <ul className="divide-y divide-line">
+        {rows.map((b) => (
+          <li key={b.asset_code} className="flex items-center gap-3 px-5 py-3">
+            <CurrencyIcon asset={b.asset_code} className="size-8" />
+            <span className="flex-1 text-sm text-ink">{b.asset_code}</span>
+            <span className="text-right">
+              <Money minor={b.available} asset={b.asset_code} assets={assets} className="block text-sm font-medium text-ink" />
+              {Number(b.pending ?? 0) > 0 && (
+                <span className="block text-xs text-pending">
+                  + <Money minor={b.pending} asset={b.asset_code} assets={assets} /> pending
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 function ngnTotal(rows: AssetTotal[] | undefined, decimals: number): number {
   return toMajor(rows?.find((r) => r.asset_code === 'NGN')?.total ?? '0', decimals);
 }
@@ -39,6 +67,7 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
 
   const assets = useAssets();
   const balances = useBalances();
+  const customerBalances = useCustomerBalanceTotals(can(role, 'customers.read'));
   const txns = useTransactions();
   const customers = useCustomers();
   const disputes = useDisputes();
@@ -47,7 +76,9 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
 
   const ngnDecimals = decimalsFor('NGN', assets.data);
   const ngn = balances.data?.find((b) => b.asset_code === 'NGN');
-  const crypto = (balances.data ?? []).filter((b) => b.asset_code !== 'NGN' && Number(b.available) > 0);
+  const crypto = nonZeroCrypto(balances.data);
+  const customerCrypto = nonZeroCrypto(customerBalances.data);
+  const cryptoLoading = balances.loading || customerBalances.loading;
   const openDisputes = (disputes.data ?? []).filter((d) => d.status === 'open' || d.status === 'under_review');
 
   const daily = useMemo(() => {
@@ -172,23 +203,19 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
 
         {/* Crypto balances */}
         <Card className="lg:col-span-2 overflow-hidden flex flex-col">
-          <CardHeader title="Crypto balances" description="Held for your business" />
+          <CardHeader title="Crypto balances" description="Your business and your customers" />
           <div className="border-t border-line flex-1">
-            {balances.loading ? (
+            {cryptoLoading ? (
               <LoadingRows rows={3} />
-            ) : crypto.length === 0 ? (
+            ) : crypto.length === 0 && customerCrypto.length === 0 ? (
               <EmptyState title="No crypto yet" description="Stablecoin and crypto deposits show up here." />
             ) : (
-              <ul className="divide-y divide-line">
-                {crypto.map((b) => (
-                  <li key={b.asset_code} className="flex items-center gap-3 px-5 py-3">
-                    <CurrencyIcon asset={b.asset_code} className="size-8" />
-                    <span className="flex-1 text-sm text-ink">{b.asset_code}</span>
-                    <Money minor={b.available} asset={b.asset_code} assets={assets.data} className="text-sm font-medium text-ink" />
-                  </li>
-                ))}
-              </ul>
+              <>
+                {crypto.length > 0 && <CryptoRows title="Your business" rows={crypto} assets={assets.data} />}
+                {customerCrypto.length > 0 && <CryptoRows title="Held for customers" rows={customerCrypto} assets={assets.data} />}
+              </>
             )}
+            {customerBalances.error && <p className="px-5 py-3 text-xs text-negative">{customerBalances.error.message}</p>}
           </div>
         </Card>
       </div>
