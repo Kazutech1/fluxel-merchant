@@ -6,6 +6,7 @@
  */
 
 import { ConsoleError, dash, useResource, v1 } from './client';
+import { sumMinor } from './money';
 import type {
   ApiTransaction,
   Asset,
@@ -57,6 +58,29 @@ export const useCustomerAddresses = (id: string | null) =>
   useResource(id ? `customers:${id}:addresses` : null, () => v1.get<CustomerAddress[]>(`customers/${id}/addresses`));
 export const useCustomerBalances = (id: string | null) =>
   useResource(id ? `customers:${id}:balances` : null, () => v1.get<Balance[]>(`customers/${id}/balances`));
+
+/**
+ * What all customers hold, summed per asset. Deposits to a customer's address
+ * land in that customer's balance, not the business's, and the API has no
+ * total for it — so this asks each customer, a few at a time.
+ * Keyed under `balances` so a withdrawal or transfer refreshes it too.
+ */
+export const useCustomerBalanceTotals = (enabled: boolean) =>
+  useResource(enabled ? `balances:customers` : null, async (): Promise<Balance[]> => {
+    const customers = await v1.get<Customer[]>('customers');
+    const rows: Balance[] = [];
+    for (let i = 0; i < customers.length; i += 5) {
+      const batch = await Promise.all(customers.slice(i, i + 5).map((c) => v1.get<Balance[]>(`customers/${c.id}/balances`)));
+      rows.push(...batch.flat());
+    }
+    const byAsset = new Map<string, Balance[]>();
+    for (const r of rows) byAsset.set(r.asset_code, [...(byAsset.get(r.asset_code) ?? []), r]);
+    return [...byAsset].map(([asset_code, list]) => ({
+      asset_code,
+      available: sumMinor(list.map((b) => b.available)),
+      pending: sumMinor(list.map((b) => b.pending)),
+    }));
+  });
 
 export const usePaymentLinks = () =>
   useResource(`links`, async () => (await v1.get<Page<PaymentLink>>('payment-links', { limit: LIMIT })).data);

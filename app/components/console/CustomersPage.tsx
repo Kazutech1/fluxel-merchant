@@ -196,8 +196,8 @@ function RequestPaymentModal({
 }
 
 /** Naira, USDT, Bitcoin and Ether always (zero if empty), then anything else the customer holds. */
-function balanceTiles(balances: Balance[]): { asset: string; label: string; available: string }[] {
-  const find = (codes: string[]) => balances.find((b) => codes.includes(b.asset_code))?.available ?? '0';
+function balanceTiles(balances: Balance[]): { asset: string; label: string; available: string; pending: string }[] {
+  const find = (codes: string[]) => balances.find((b) => codes.includes(b.asset_code));
   const main = [
     { asset: 'NGN', label: 'Naira', codes: ['NGN'] },
     { asset: 'USDT-TRON', label: 'USDT', codes: ['USDT-TRON', 'USDT'] },
@@ -206,10 +206,13 @@ function balanceTiles(balances: Balance[]): { asset: string; label: string; avai
   ];
   const shown = new Set(main.flatMap((m) => m.codes));
   return [
-    ...main.map((m) => ({ asset: m.asset, label: m.label, available: find(m.codes) })),
+    ...main.map((m) => {
+      const b = find(m.codes);
+      return { asset: b?.asset_code ?? m.asset, label: m.label, available: b?.available ?? '0', pending: b?.pending ?? '0' };
+    }),
     ...balances
-      .filter((b) => !shown.has(b.asset_code) && Number(b.available) > 0)
-      .map((b) => ({ asset: b.asset_code, label: b.asset_code, available: b.available })),
+      .filter((b) => !shown.has(b.asset_code) && (Number(b.available) > 0 || Number(b.pending ?? 0) > 0))
+      .map((b) => ({ asset: b.asset_code, label: b.asset_code, available: b.available, pending: b.pending ?? '0' })),
   ];
 }
 
@@ -280,6 +283,11 @@ function CustomerDrawer({ customer, props }: { customer: Customer; props: PagePr
                   assets={assets}
                   className={cx('mt-2 block text-base font-semibold', Number(t.available) > 0 ? 'text-ink' : 'text-ink-3')}
                 />
+              )}
+              {!balances.loading && Number(t.pending) > 0 && (
+                <span className="mt-0.5 block text-xs text-pending">
+                  + <Money minor={t.pending} asset={t.asset} assets={assets} /> pending
+                </span>
               )}
             </div>
           ))}
