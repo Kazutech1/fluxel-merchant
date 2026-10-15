@@ -9,6 +9,10 @@
  * carries the merchant's publishable key plus display-only details the API
  * doesn't store yet: merchant name, order ref, line items, return URL. Money
  * and status always come from the API, never from the link.
+ *
+ * Status updates are pushed over Server-Sent Events from the API's
+ * `/v1/{crypto,fiat}-deposit-intents/{id}/events` (proxied by
+ * `/api/pay/{id}/events`), with polling kept only as a fallback.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -46,7 +50,50 @@ const STATUS: Record<string, CheckoutStatus> = {
 };
 
 const SETTLED: CheckoutStatus[] = ['completed', 'underpaid', 'expired'];
+/** Fallback poll interval, used only when the push stream isn't available. */
 const POLL_MS = 4000;
+/** Delay before reopening a stream that dropped before the intent settled. */
+const RECONNECT_MS = 2000;
+/** Consecutive streams that fail without delivering a single event before we give up and poll. */
+const MAX_STREAM_FAILURES = 3;
+
+/**
+ * Reads `event: status` frames off a Server-Sent Events body.
+ * Resolves when the stream ends (the API closes it on terminal status).
+ */
+async function readStatusEvents(body: ReadableStream<Uint8Array>, onIntent: (intent: IntentResponse) => void) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    // A lone trailing \r may be half of a \r\n split across chunks — leave it
+    // until the next read so it isn't mistaken for a line break of its own.
+    buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n|\r(?!$)/g, '\n');
+    let sep: number;
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      let event = 'message';
+      const data: string[] = [];
+      for (const line of frame.split('\n')) {
+        if (!line || line.startsWith(':')) continue; // keep-alive comment
+        const idx = line.indexOf(':');
+        const field = idx === -1 ? line : line.slice(0, idx);
+        const val = idx === -1 ? '' : line.slice(idx + 1).replace(/^ /, '');
+        if (field === 'event') event = val;
+        else if (field === 'data') data.push(val);
+      }
+      if (event !== 'status' || !data.length) continue;
+      try {
+        onIntent(JSON.parse(data.join('\n')) as IntentResponse);
+      } catch {
+        // Malformed frame — skip it, the next status change carries full state.
+      }
+    }
+  }
+}
 
 function toSession(intent: IntentResponse, ctx: CheckoutContext, completedAt?: string): PaymentSession {
   const asset = (intent.asset_code ?? 'NGN') as AssetCode;
@@ -83,7 +130,23 @@ export type LiveState =
   | { kind: 'error'; status: number; message: string }
   | { kind: 'ready'; session: PaymentSession };
 
-/** Polls the intent until it settles. */
+/**
+ * Raw API statuses after which the server closes the event stream. Includes
+ * fiat's `failed`, which has no checkout screen of its own yet — we still stop
+ * listening so a closed stream isn't reopened forever.
+ */
+const TERMINAL_RAW = ['fulfilled', 'completed', 'underpaid', 'expired', 'failed'];
+
+/**
+ * Follows the intent until it settles.
+ *
+ * 1. One plain GET for the initial render and proper error statuses (the
+ *    event stream just closes on not-found, it doesn't return a 404 body).
+ * 2. Then a push stream from `GET /api/pay/{reference}/events` — the API
+ *    sends a frame on every status change and closes on terminal status.
+ * 3. Dropped streams are reopened; if streaming keeps failing outright, we
+ *    fall back to polling the plain GET every `POLL_MS`.
+ */
 export function useLiveSession(reference: string, ctx: CheckoutContext): LiveState {
   const [state, setState] = useState<LiveState>({ kind: 'loading' });
   // The API has no completed_at on intents; stamp it when we first see it
@@ -93,36 +156,81 @@ export function useLiveSession(reference: string, ctx: CheckoutContext): LiveSta
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     let stopped = false;
+    let streamFailures = 0;
+    const abort = new AbortController();
+    const path = `/api/pay/${encodeURIComponent(reference)}`;
+    const headers = { 'x-fluxel-pk': ctx.pk };
 
-    async function poll() {
-      let settled = false;
+    /** Renders an intent; returns true once there's nothing more to wait for. */
+    function apply(intent: IntentResponse): boolean {
+      const status = STATUS[intent.status];
+      if (SETTLED.includes(status) && !completedAt.current) completedAt.current = new Date().toISOString();
+      setState({ kind: 'ready', session: toSession(intent, ctx, completedAt.current) });
+      return TERMINAL_RAW.includes(intent.status);
+    }
+
+    /** Plain GET. 'open' = keep following, 'retry' = transient failure, 'done' = stop. */
+    async function snapshot(): Promise<'open' | 'retry' | 'done'> {
       try {
-        const res = await fetch(`/api/pay/${encodeURIComponent(reference)}`, {
-          headers: { 'x-fluxel-pk': ctx.pk },
-          cache: 'no-store',
-        });
+        const res = await fetch(path, { headers, cache: 'no-store', signal: abort.signal });
         const body = await res.json();
-        if (stopped) return;
+        if (stopped) return 'done';
         if (!res.ok) {
           setState({ kind: 'error', status: res.status, message: body?.error?.message ?? 'Request failed' });
           // 4xx won't fix itself; 5xx might.
-          settled = res.status < 500;
-        } else {
-          const status = STATUS[(body as IntentResponse).status];
-          if (SETTLED.includes(status) && !completedAt.current) completedAt.current = new Date().toISOString();
-          setState({ kind: 'ready', session: toSession(body, ctx, completedAt.current) });
-          settled = SETTLED.includes(status);
+          return res.status < 500 ? 'done' : 'retry';
         }
+        return apply(body as IntentResponse) ? 'done' : 'open';
       } catch {
         // Network blip — keep the last good state and try again.
+        return 'retry';
       }
-      if (!stopped && !settled) timer = setTimeout(poll, POLL_MS);
     }
 
-    poll();
+    async function poll() {
+      const result = await snapshot();
+      if (!stopped && result !== 'done') timer = setTimeout(poll, POLL_MS);
+    }
+
+    async function stream() {
+      let settled = false;
+      let gotEvent = false;
+      try {
+        const res = await fetch(`${path}/events`, { headers, cache: 'no-store', signal: abort.signal });
+        if (res.ok && res.body) {
+          await readStatusEvents(res.body, (intent) => {
+            if (stopped) return;
+            gotEvent = true;
+            settled = apply(intent) || settled;
+          });
+        }
+      } catch {
+        // Aborted on unmount, or the connection dropped — handled below.
+      }
+      if (stopped || settled) return;
+
+      streamFailures = gotEvent ? 0 : streamFailures + 1;
+      if (streamFailures >= MAX_STREAM_FAILURES) {
+        // Streaming isn't working here (proxy buffering, older API build
+        // without /events, …). Degrade to the old polling loop.
+        timer = setTimeout(poll, POLL_MS);
+        return;
+      }
+      timer = setTimeout(stream, RECONNECT_MS);
+    }
+
+    async function start() {
+      const result = await snapshot();
+      if (stopped) return;
+      if (result === 'open') stream();
+      else if (result === 'retry') timer = setTimeout(start, POLL_MS);
+    }
+
+    start();
     return () => {
       stopped = true;
       clearTimeout(timer);
+      abort.abort();
     };
   }, [reference, ctx]);
 
