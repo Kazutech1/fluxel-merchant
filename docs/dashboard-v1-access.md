@@ -37,3 +37,13 @@ Checkout links (`/pay/{intent}?c=…`) carry the merchant's `pk_` key, because s
 | OpenAPI | Several list endpoints (`/transactions`, `/deposits`, `/payment-links`, `/refunds`, `/reports/settlement-summary`) are documented as `{message: string}`. | Document the real `{data, next_cursor}` shapes. |
 | `GET /v1/dashboard/sessions` | Returns `[]` right after logging in. | Check whether login sessions are recorded. If not, the Security tab can't show the current device. |
 | IP allowlist (`PUT /v1/dashboard/keys/{id}/ip-allowlist`) | Accepts any strings with no CIDR validation. The saved list is **never enforced**: no middleware compares the caller's IP with it. The keys list also doesn't return it, so it can't be read back. | Validate CIDRs on write, reject requests from addresses outside a non-empty list (`403 ip_not_allowed`), and add `ip_allowlist` to the key response. |
+
+
+
+
+kaztech069@gmail.com
+
+
+
+
+brown depth nut oven chest dove diary wage deputy arch brand find
