@@ -14,7 +14,7 @@ import {
 } from '../../lib/console/data';
 import { DAY_MS, startOfDay } from '../../lib/console/format';
 import { decimalsFor, formatMajor, toMajor } from '../../lib/console/money';
-import type { AssetTotal } from '../../lib/console/models';
+import type { Asset, AssetTotal, Balance } from '../../lib/console/models';
 import { useNow } from '../../lib/console/useNow';
 import { can } from '../../lib/permissions';
 import BarChart from './BarChart';
@@ -34,6 +34,31 @@ const CARD_GRID: React.CSSProperties = {
 function greeting(): string {
   const h = new Date().getHours();
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
+
+function nonZeroCrypto(rows: Balance[] | undefined): Balance[] {
+  return (rows ?? []).filter((b) => b.asset_code !== 'NGN' && (Number(b.available) > 0 || Number(b.pending ?? 0) > 0));
+}
+
+function CryptoRows({ rows, assets }: { rows: Balance[]; assets?: Asset[] }) {
+  return (
+    <ul className="divide-y divide-line">
+      {rows.map((b) => (
+        <li key={b.asset_code} className="flex items-center gap-3 px-5 py-3">
+          <CurrencyIcon asset={b.asset_code} className="size-8" />
+          <span className="flex-1 text-sm text-ink">{b.asset_code}</span>
+          <span className="text-right">
+            <Money minor={b.available} asset={b.asset_code} assets={assets} className="block text-sm font-medium text-ink" />
+            {Number(b.pending ?? 0) > 0 && (
+              <span className="block text-xs text-pending">
+                + <Money minor={b.pending} asset={b.asset_code} assets={assets} /> pending
+              </span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function ngnTotal(rows: AssetTotal[] | undefined, decimals: number): number {
