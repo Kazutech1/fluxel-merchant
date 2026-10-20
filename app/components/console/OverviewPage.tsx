@@ -3,7 +3,15 @@
 import React, { useMemo } from 'react';
 import { ArrowRight, ArrowUpRight, BadgeCheck, Link2, UserPlus } from 'lucide-react';
 
-import { useAssets, useBalances, useCustomers, useDisputes, useSettlementSummary, useStaticAccount, useTransactions } from '../../lib/console/data';
+import {
+  useAssets,
+  useCustomerBalancesTotal,
+  useCustomers,
+  useDisputes,
+  useSettlementSummary,
+  useStaticAccount,
+  useTransactions,
+} from '../../lib/console/data';
 import { DAY_MS, startOfDay } from '../../lib/console/format';
 import { decimalsFor, formatMajor, toMajor } from '../../lib/console/money';
 import type { Asset, AssetTotal, Balance } from '../../lib/console/models';
@@ -63,16 +71,17 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
   const to = useMemo(() => new Date(startOfDay(now) + DAY_MS).toISOString(), [now]);
 
   const assets = useAssets();
-  const balances = useBalances();
   const txns = useTransactions();
   const customers = useCustomers();
   const disputes = useDisputes();
   const summary = useSettlementSummary(from, to);
   const staticAccount = useStaticAccount();
+  // Dashboard balances = total held across all customers, per asset.
+  const balances = useCustomerBalancesTotal();
 
   const ngnDecimals = decimalsFor('NGN', assets.data);
   const ngn = balances.data?.find((b) => b.asset_code === 'NGN');
-  const crypto = nonZeroCrypto(balances.data);
+  const crypto = (balances.data ?? []).filter((b) => b.asset_code !== 'NGN' && b.total !== '0');
   const openDisputes = (disputes.data ?? []).filter((d) => d.status === 'open' || d.status === 'under_review');
 
   const daily = useMemo(() => {
@@ -164,13 +173,12 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
             <p className="relative mt-4 text-sm text-slate-400">{balances.error.message}</p>
           ) : (
             <Money
-              minor={ngn?.available ?? '0'}
+              minor={ngn?.total ?? '0'}
               asset="NGN"
               assets={assets.data}
               className="relative mt-3 block text-[2rem] sm:text-[2.5rem] leading-none font-semibold text-white"
             />
           )}
-          <p className="relative mt-2 text-sm text-slate-400">Available to withdraw</p>
 
           <div className="relative mt-auto pt-5 border-t border-white/10 flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0 text-xs">
@@ -197,14 +205,22 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
 
         {/* Crypto balances */}
         <Card className="lg:col-span-2 overflow-hidden flex flex-col">
-          <CardHeader title="Crypto balances" description="Held for your business" />
+          <CardHeader title="Crypto balances" />
           <div className="border-t border-line flex-1">
             {balances.loading ? (
               <LoadingRows rows={3} />
             ) : crypto.length === 0 ? (
               <EmptyState title="No crypto yet" description="Stablecoin and crypto deposits show up here." />
             ) : (
-              <CryptoRows rows={crypto} assets={assets.data} />
+              <ul className="divide-y divide-line">
+                {crypto.map((b) => (
+                  <li key={b.asset_code} className="flex items-center gap-3 px-5 py-3">
+                    <CurrencyIcon asset={b.asset_code} className="size-8" />
+                    <span className="flex-1 text-sm text-ink">{b.asset_code}</span>
+                    <Money minor={b.total} asset={b.asset_code} assets={assets.data} className="text-sm font-medium text-ink" />
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </Card>
