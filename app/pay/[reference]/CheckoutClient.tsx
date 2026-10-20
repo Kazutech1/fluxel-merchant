@@ -3,7 +3,6 @@
 import React from 'react';
 import { SearchX } from 'lucide-react';
 import {
-  CheckoutStatus,
   createDemoSession,
   isCryptoAsset,
   usePaymentSession,
@@ -22,25 +21,10 @@ import BankTransferPanel from '../../components/checkout/BankTransferPanel';
 import CryptoPanel from '../../components/checkout/CryptoPanel';
 import ResultPanel from '../../components/checkout/ResultPanel';
 import DemoControls from '../../components/checkout/DemoControls';
+import { CheckoutCard, CheckoutSkeleton } from './LiveCheckout';
 
 interface CheckoutClientProps {
   reference: string;
-}
-
-const HEADINGS: Record<CheckoutStatus, string> = {
-  awaiting_payment: 'Awaiting payment',
-  confirming: 'Confirming payment',
-  completed: 'Payment complete',
-  underpaid: 'Payment on hold',
-  expired: 'Request expired',
-};
-
-function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-svh bg-white dark:bg-[#0d0d0d] text-slate-900 dark:text-slate-100 flex items-center justify-center px-5 py-10">
-      <div className="w-full max-w-sm">{children}</div>
-    </div>
-  );
 }
 
 export default function CheckoutClient({ reference }: CheckoutClientProps) {
@@ -53,22 +37,11 @@ export default function CheckoutClient({ reference }: CheckoutClientProps) {
 
   useDemoDriver(session, hydrated && demoEnabled);
 
-  if (!hydrated) {
-    return (
-      <Centered>
-        <div className="animate-pulse space-y-4">
-          <div className="h-9 w-40 rounded bg-slate-200 dark:bg-[#1e1e22]" />
-          <div className="h-px bg-slate-200 dark:bg-[#1e1e22]" />
-          <div className="h-12 rounded-lg bg-slate-200 dark:bg-[#1e1e22]" />
-          <div className="h-12 rounded-lg bg-slate-200 dark:bg-[#1e1e22]" />
-        </div>
-      </Centered>
-    );
-  }
+  if (!hydrated) return <CheckoutSkeleton />;
 
   if (!session) {
     return (
-      <Centered>
+      <CheckoutCard>
         <span className="w-11 h-11 flex items-center justify-center rounded-full bg-slate-100 dark:bg-[#1a1a1f] text-slate-500 dark:text-slate-400">
           <SearchX className="w-5 h-5" />
         </span>
@@ -87,7 +60,7 @@ export default function CheckoutClient({ reference }: CheckoutClientProps) {
             Create a demo request at this link
           </button>
         )}
-      </Centered>
+      </CheckoutCard>
     );
   }
 
@@ -99,11 +72,7 @@ export default function CheckoutClient({ reference }: CheckoutClientProps) {
   return (
     <>
       <CheckoutShell session={session}>
-        <h1 className="text-[1.75rem] sm:text-[2rem] leading-none font-semibold tracking-tight">
-          {HEADINGS[session.status]}
-        </h1>
-
-        <div className="mt-7">
+        <div>
           {settled ? (
             <ResultPanel session={session} onRestart={() => restartSession(session)} />
           ) : isCryptoAsset(session.asset_code) ? (

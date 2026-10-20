@@ -169,6 +169,11 @@ export async function requireTokens(): Promise<TokenPair> {
   return rotate(stored.refreshToken);
 }
 
+/** The API refusing a `/v1` route to dashboard sessions, as opposed to a spent token. */
+export function isRouteClosedToDashboard(error: FluxelApiError): boolean {
+  return error.status === 401 && /not available to a dashboard session/i.test(error.message);
+}
+
 /**
  * Authenticated call. Rotates proactively on a spent access token, and once
  * more reactively — the API mints JWTs from an ephemeral secret when
@@ -182,6 +187,9 @@ export async function dashboardRequest<T>(path: string, init: RequestInit = {}):
     return await apiRequest<T>(path, withBearer(init, tokens.access_token));
   } catch (cause) {
     if (!(cause instanceof FluxelApiError) || cause.status !== 401) throw cause;
+    // `/v1` routes outside the API's dashboard-JWT allowlist answer 401 too
+    // (`api/src/middleware/tenant.rs`); a fresh token won't change that.
+    if (isRouteClosedToDashboard(cause)) throw cause;
     const rotated = await rotate(tokens.refresh_token);
     return apiRequest<T>(path, withBearer(init, rotated.access_token));
   }

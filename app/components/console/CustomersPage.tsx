@@ -258,6 +258,7 @@ function CustomerDrawer({ customer, props }: { customer: Customer; props: PagePr
         </div>
       )}
 
+
       <DetailList items={[{ term: 'Customer ID', detail: <span className="font-mono text-[13px] break-all">{customer.id}</span> }]} />
 
       <h3 className="mt-8 mb-3 text-sm font-semibold text-ink">Balances</h3>

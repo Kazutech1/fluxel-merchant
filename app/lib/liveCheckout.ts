@@ -10,12 +10,15 @@
  * doesn't store yet: merchant name, order ref, line items, return URL. Money
  * and status always come from the API, never from the link.
  *
- * Status updates are pushed over Server-Sent Events from the API's
- * `/v1/{crypto,fiat}-deposit-intents/{id}/events` (proxied by
- * `/api/pay/{id}/events`), with polling kept only as a fallback.
+ * Status comes from polling the intent every few seconds, always. A Server-
+ * Sent Events stream from `/v1/{crypto,fiat}-deposit-intents/{id}/events`
+ * (proxied by `/api/pay/{id}/events`) runs alongside to land changes sooner,
+ * but nothing depends on it: a stream that stays connected yet never delivers
+ * (a buffering proxy does exactly that) used to leave the page frozen until
+ * the payer refreshed.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AssetCode } from '../types/dashboard';
 import { CheckoutStatus, PaymentSession } from './paymentSessions';
 import type { CheckoutContext } from './checkoutContext';
@@ -50,12 +53,33 @@ const STATUS: Record<string, CheckoutStatus> = {
 };
 
 const SETTLED: CheckoutStatus[] = ['completed', 'underpaid', 'expired'];
-/** Fallback poll interval, used only when the push stream isn't available. */
-const POLL_MS = 4000;
+
+/**
+ * Raw API statuses after which nothing more changes (and the server closes
+ * the event stream). Includes fiat's `failed`, which has no screen of its own
+ * yet — we still stop checking so a finished intent isn't polled forever.
+ */
+const TERMINAL_RAW = ['fulfilled', 'completed', 'underpaid', 'expired', 'failed'];
+
+/** Poll interval while the page is in view. */
+const POLL_MS = 3000;
+/** Poll interval while the tab is in the background — it re-checks the moment it's back. */
+const HIDDEN_POLL_MS = 15_000;
 /** Delay before reopening a stream that dropped before the intent settled. */
-const RECONNECT_MS = 2000;
-/** Consecutive streams that fail without delivering a single event before we give up and poll. */
+const RECONNECT_MS = 3000;
+/** Consecutive streams that fail without delivering an event before we stop reopening them. */
 const MAX_STREAM_FAILURES = 3;
+
+/**
+ * How far along an intent is. Poll and stream answers can arrive out of
+ * order, so an older one must never move the page backwards.
+ */
+function progress(intent: IntentResponse): number {
+  if (TERMINAL_RAW.includes(intent.status)) return 3;
+  if (intent.status === 'confirming') return 2;
+  if (intent.va?.account_number || intent.address) return 1;
+  return 0;
+}
 
 /**
  * Reads `event: status` frames off a Server-Sent Events body.
@@ -125,75 +149,97 @@ function toSession(intent: IntentResponse, ctx: CheckoutContext, completedAt?: s
   };
 }
 
+interface LiveReady {
+  kind: 'ready';
+  session: PaymentSession;
+}
+
 export type LiveState =
   | { kind: 'loading' }
   | { kind: 'error'; status: number; message: string }
-  | { kind: 'ready'; session: PaymentSession };
-
-/**
- * Raw API statuses after which the server closes the event stream. Includes
- * fiat's `failed`, which has no checkout screen of its own yet — we still stop
- * listening so a closed stream isn't reopened forever.
- */
-const TERMINAL_RAW = ['fulfilled', 'completed', 'underpaid', 'expired', 'failed'];
+  | (LiveReady & {
+      /** Ask the API right now — "I've sent the money", the countdown reaching zero. */
+      refresh: () => void;
+    });
 
 /**
  * Follows the intent until it settles.
  *
- * 1. One plain GET for the initial render and proper error statuses (the
- *    event stream just closes on not-found, it doesn't return a 404 body).
- * 2. Then a push stream from `GET /api/pay/{reference}/events` — the API
- *    sends a frame on every status change and closes on terminal status.
- * 3. Dropped streams are reopened; if streaming keeps failing outright, we
- *    fall back to polling the plain GET every `POLL_MS`.
+ * 1. A plain GET for the first render and proper error statuses.
+ * 2. Then the same GET on a timer — every `POLL_MS` in view, every
+ *    `HIDDEN_POLL_MS` in a background tab, and straight away when the tab
+ *    comes back or the connection returns.
+ * 3. Alongside, the push stream from `GET /api/pay/{reference}/events`,
+ *    reopened when it drops. It only makes updates arrive sooner.
  */
 export function useLiveSession(reference: string, ctx: CheckoutContext): LiveState {
-  const [state, setState] = useState<LiveState>({ kind: 'loading' });
+  const [state, setState] = useState<LiveReady | Exclude<LiveState, LiveReady>>({ kind: 'loading' });
   // The API has no completed_at on intents; stamp it when we first see it
   // settle so ResultPanel's return-to-merchant countdown has a start point.
   const completedAt = useRef<string | undefined>(undefined);
+  const checkNow = useRef<() => void>(() => {});
+  const refresh = useCallback(() => checkNow.current(), []);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let streamTimer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
+    let loaded = false;
+    let best = -1;
+    let inflight = false;
     let streamFailures = 0;
     const abort = new AbortController();
     const path = `/api/pay/${encodeURIComponent(reference)}`;
     const headers = { 'x-fluxel-pk': ctx.pk };
 
-    /** Renders an intent; returns true once there's nothing more to wait for. */
-    function apply(intent: IntentResponse): boolean {
-      const status = STATUS[intent.status];
-      if (SETTLED.includes(status) && !completedAt.current) completedAt.current = new Date().toISOString();
-      setState({ kind: 'ready', session: toSession(intent, ctx, completedAt.current) });
-      return TERMINAL_RAW.includes(intent.status);
+    function stop() {
+      stopped = true;
+      clearTimeout(timer);
+      clearTimeout(streamTimer);
+      abort.abort();
     }
 
-    /** Plain GET. 'open' = keep following, 'retry' = transient failure, 'done' = stop. */
-    async function snapshot(): Promise<'open' | 'retry' | 'done'> {
+    /** Renders an intent unless it's behind what's already on screen. */
+    function apply(intent: IntentResponse) {
+      const rank = progress(intent);
+      if (rank < best) return;
+      best = rank;
+      loaded = true;
+      if (SETTLED.includes(STATUS[intent.status]) && !completedAt.current) completedAt.current = new Date().toISOString();
+      setState({ kind: 'ready', session: toSession(intent, ctx, completedAt.current) });
+      if (TERMINAL_RAW.includes(intent.status)) stop();
+    }
+
+    function schedule() {
+      clearTimeout(timer);
+      if (stopped) return;
+      timer = setTimeout(check, document.visibilityState === 'hidden' ? HIDDEN_POLL_MS : POLL_MS);
+    }
+
+    async function check() {
+      if (stopped || inflight) return;
+      inflight = true;
       try {
         const res = await fetch(path, { headers, cache: 'no-store', signal: abort.signal });
-        const body = await res.json();
-        if (stopped) return 'done';
-        if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        if (stopped) return;
+        if (res.ok) {
+          apply(body as IntentResponse);
+        } else if (!loaded) {
           setState({ kind: 'error', status: res.status, message: body?.error?.message ?? 'Request failed' });
-          // 4xx won't fix itself; 5xx might.
-          return res.status < 500 ? 'done' : 'retry';
+          // A bad link or key won't fix itself; a server hiccup might.
+          if (res.status < 500) stop();
         }
-        return apply(body as IntentResponse) ? 'done' : 'open';
       } catch {
-        // Network blip — keep the last good state and try again.
-        return 'retry';
+        // Network blip — keep what's on screen and try again on the next tick.
+      } finally {
+        inflight = false;
+        schedule();
       }
     }
 
-    async function poll() {
-      const result = await snapshot();
-      if (!stopped && result !== 'done') timer = setTimeout(poll, POLL_MS);
-    }
-
     async function stream() {
-      let settled = false;
+      if (stopped) return;
       let gotEvent = false;
       try {
         const res = await fetch(`${path}/events`, { headers, cache: 'no-store', signal: abort.signal });
@@ -201,38 +247,38 @@ export function useLiveSession(reference: string, ctx: CheckoutContext): LiveSta
           await readStatusEvents(res.body, (intent) => {
             if (stopped) return;
             gotEvent = true;
-            settled = apply(intent) || settled;
+            apply(intent);
           });
         }
       } catch {
-        // Aborted on unmount, or the connection dropped — handled below.
+        // Aborted, or the connection dropped — polling carries on regardless.
       }
-      if (stopped || settled) return;
-
-      streamFailures = gotEvent ? 0 : streamFailures + 1;
-      if (streamFailures >= MAX_STREAM_FAILURES) {
-        // Streaming isn't working here (proxy buffering, older API build
-        // without /events, …). Degrade to the old polling loop.
-        timer = setTimeout(poll, POLL_MS);
-        return;
-      }
-      timer = setTimeout(stream, RECONNECT_MS);
-    }
-
-    async function start() {
-      const result = await snapshot();
       if (stopped) return;
-      if (result === 'open') stream();
-      else if (result === 'retry') timer = setTimeout(start, POLL_MS);
+      streamFailures = gotEvent ? 0 : streamFailures + 1;
+      if (streamFailures < MAX_STREAM_FAILURES) streamTimer = setTimeout(stream, RECONNECT_MS);
     }
 
-    start();
+    function wake() {
+      if (document.visibilityState === 'visible') void check();
+    }
+
+    checkNow.current = () => void check();
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('online', wake);
+    window.addEventListener('focus', wake);
+
+    void check().then(() => {
+      if (loaded) void stream();
+    });
+
     return () => {
-      stopped = true;
-      clearTimeout(timer);
-      abort.abort();
+      stop();
+      checkNow.current = () => {};
+      document.removeEventListener('visibilitychange', wake);
+      window.removeEventListener('online', wake);
+      window.removeEventListener('focus', wake);
     };
   }, [reference, ctx]);
 
-  return state;
+  return state.kind === 'ready' ? { ...state, refresh } : state;
 }
