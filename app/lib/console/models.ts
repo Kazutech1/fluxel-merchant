@@ -185,7 +185,7 @@ export interface DashboardSession {
  * Merchant-facing events from the API's event catalog (Doc 6;
  * Fluxel-System/crates/shared event names) — what an endpoint can subscribe to.
  */
-export const WEBHOOK_EVENT_GROUPS: { label: string; events: string[] }[] = [
+export const WEBHOOK_EVENT_GROUPS: { label: string; events: string[]; crypto?: boolean }[] = [
   {
     label: 'Naira',
     events: [
@@ -200,6 +200,7 @@ export const WEBHOOK_EVENT_GROUPS: { label: string; events: string[] }[] = [
   },
   {
     label: 'Crypto',
+    crypto: true,
     events: [
       'crypto.deposit.detected',
       'crypto.deposit.confirmed',

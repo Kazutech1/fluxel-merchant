@@ -21,6 +21,25 @@ Checkout links (`/pay/{intent}?c=…`) carry the merchant's `pk_` key, because s
 
 **Keys left over:** businesses that used the console before this change may still have an active sandbox secret key that the console created. They show up in Developers → API keys and can be revoked there.
 
+## New ask: a switch to turn crypto off
+
+The console can hide everything about crypto, but the switch has to come from the API so it can be flipped without a redeploy. Full spec, including the staff endpoint that flips it (`PUT /admin/platform/features`): `Fluxel-System/dev_msg/2026-10-26-platform-features-crypto-switch.md`.
+
+**Ask:** `GET /v1/platform/features`, public (no key or JWT), returning:
+
+```json
+{ "crypto_disabled": true }
+```
+
+- `true`: the console hides crypto everywhere: balances, payment-request currencies, customer deposit addresses, crypto transactions, crypto webhook events, the "Crypto withdrawals" permission row, and crypto checkout links (they show "not found").
+- `false`: everything shows as it does today.
+- It must be public, because the sign-in page and the hosted checkout read it before anyone signs in.
+- The console caches the answer for 60 seconds per server process.
+
+**Crypto is on by default.** Only an explicit `"crypto_disabled": true` hides it. Any error (404, timeout, bad body) counts as `false`, so crypto shows while the endpoint is missing or down.
+
+The console only hides things. To block crypto fully, the API should also refuse crypto deposit intents, crypto withdrawals and crypto webhook subscriptions while the switch is on, because API keys can still call those routes directly.
+
 ## Other backend issues found while testing
 
 | Area | What happens | Suggested fix |
@@ -37,3 +56,13 @@ Checkout links (`/pay/{intent}?c=…`) carry the merchant's `pk_` key, because s
 | OpenAPI | Several list endpoints (`/transactions`, `/deposits`, `/payment-links`, `/refunds`, `/reports/settlement-summary`) are documented as `{message: string}`. | Document the real `{data, next_cursor}` shapes. |
 | `GET /v1/dashboard/sessions` | Returns `[]` right after logging in. | Check whether login sessions are recorded. If not, the Security tab can't show the current device. |
 | IP allowlist (`PUT /v1/dashboard/keys/{id}/ip-allowlist`) | Accepts any strings with no CIDR validation. The saved list is **never enforced**: no middleware compares the caller's IP with it. The keys list also doesn't return it, so it can't be read back. | Validate CIDRs on write, reject requests from addresses outside a non-empty list (`403 ip_not_allowed`), and add `ip_allowlist` to the key response. |
+
+
+
+
+kaztech069@gmail.com
+
+
+
+
+brown depth nut oven chest dove diary wage deputy arch brand find

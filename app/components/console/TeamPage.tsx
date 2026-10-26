@@ -6,6 +6,7 @@ import { Check, Minus, UserPlus } from 'lucide-react';
 import { dash, invalidate } from '../../lib/console/client';
 import { useTeam } from '../../lib/console/data';
 import type { TeamMember } from '../../lib/console/models';
+import { useCryptoEnabled } from '../../lib/features';
 import { PERMISSION_ROWS, ROLES, ROLE_LABEL, ROLE_SUMMARY, can, isRole, type Role } from '../../lib/permissions';
 import type { Notify } from './nav';
 import {
@@ -116,6 +117,7 @@ function InviteModal({
 
 export default function TeamPage({ role, userEmail, notify }: { role: string; userEmail: string; notify: Notify }) {
   const team = useTeam();
+  const cryptoOn = useCryptoEnabled();
   const [inviting, setInviting] = useState(false);
   const [invited, setInvited] = useState<{ email: string; password: string } | null>(null);
   const [removing, setRemoving] = useState<TeamMember | null>(null);
@@ -214,7 +216,7 @@ export default function TeamPage({ role, userEmail, notify }: { role: string; us
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {PERMISSION_ROWS.map((p) => (
+              {PERMISSION_ROWS.filter((p) => cryptoOn || !p.crypto).map((p) => (
                 <tr key={p.permission}>
                   <td className="px-5 py-3 text-ink">{p.label}</td>
                   {ROLES.map((r) => (

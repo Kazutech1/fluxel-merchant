@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Ban, ExternalLink, Plus } from 'lucide-react';
+import { Ban, ExternalLink, KeyRound, Plus } from 'lucide-react';
 
 import QrCode from '../checkout/QrCode';
 import { checkoutUrl } from '../../lib/console/checkoutLink';
-import { invalidate, v1 } from '../../lib/console/client';
+import { dash, invalidate, v1 } from '../../lib/console/client';
 import { useAssets, useCustomers, usePaymentLinks, usePublishableKey } from '../../lib/console/data';
 import { decimalsFor, toMinor } from '../../lib/console/money';
 import type { PaymentLink } from '../../lib/console/models';
@@ -34,6 +34,60 @@ import {
 } from './ui';
 import { customerLabel } from './txn';
 import { AmountField, CurrencyPicker, PAY_CURRENCIES, RequestReady, createCryptoRequest, type CreatedRequest, type PayCurrency } from './PaymentRequest';
+
+/**
+ * Shown when the dashboard can't mint a checkout key because the account is at
+ * its two-key limit: paste a sandbox publishable key you already have, and the
+ * server checks it belongs to this account before using it.
+ */
+function CheckoutKeyNeeded({ message, onNavigate }: { message: string; onNavigate: PageProps['onNavigate'] }) {
+  const [key, setKey] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="rounded-xl border border-brand/50 bg-gold-soft p-4">
+      <p className="flex items-center gap-2 text-sm font-medium text-ink">
+        <KeyRound className="size-4 text-gold" />
+        Links can’t be shared yet
+      </p>
+      <p className="mt-1 text-sm text-ink-2">{message}</p>
+      <div className="mt-3 flex flex-col sm:flex-row gap-2">
+        <input
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          placeholder="pk_test_…"
+          aria-label="Sandbox publishable key"
+          autoComplete="off"
+          spellCheck={false}
+          className={cx(inputClass, 'font-mono text-[13px] sm:flex-1')}
+        />
+        <AsyncButton
+          variant="primary"
+          disabled={!key.trim()}
+          onClick={async () => {
+            setError(null);
+            try {
+              await dash.post('console', { publishableKey: key.trim() });
+              invalidate('console');
+            } catch (e) {
+              setError(e instanceof Error ? e.message : 'Could not use that key.');
+            }
+          }}
+        >
+          Use this key
+        </AsyncButton>
+      </div>
+      {error && <p role="alert" className="mt-2 text-sm text-negative">{error}</p>}
+      <p className="mt-3 text-xs text-ink-3">
+        Don’t have one saved?{' '}
+        <button type="button" onClick={() => onNavigate('developers')} className="underline underline-offset-2 hover:text-ink cursor-pointer">
+          Revoke a sandbox publishable key
+        </button>{' '}
+        and the dashboard makes a new one — but links already shared with the revoked key stop working.
+      </p>
+    </div>
+  );
+}
 
 function CreateLinkModal({ props, onClose }: { props: PageProps; onClose: (createdId?: string) => void }) {
   const { notify, business } = props;
@@ -185,6 +239,7 @@ export default function PaymentLinksPage(props: PageProps) {
       : '';
 
   const open = sub && sub !== 'new' ? links.data?.find((l) => l.id === sub) ?? null : null;
+  const keyLimit = meta.error?.code === 'checkout_key_limit' ? meta.error.message : null;
 
   return (
     <>
@@ -200,6 +255,12 @@ export default function PaymentLinksPage(props: PageProps) {
           )
         }
       />
+
+      {keyLimit && (
+        <div className="mb-4">
+          <CheckoutKeyNeeded message={keyLimit} onNavigate={onNavigate} />
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         {links.loading ? (
@@ -251,7 +312,13 @@ export default function PaymentLinksPage(props: PageProps) {
                   </div>
                 </>
               ) : (
-                <p className="mt-6 text-sm text-negative">{meta.error?.message ?? 'Preparing your link…'}</p>
+                <div className="mt-6">
+                  {keyLimit ? (
+                    <CheckoutKeyNeeded message={keyLimit} onNavigate={onNavigate} />
+                  ) : (
+                    <p className={cx('text-sm', meta.error ? 'text-negative' : 'text-ink-3')}>{meta.error?.message ?? 'Preparing your link…'}</p>
+                  )}
+                </div>
               ))}
 
             <div className="mt-6">

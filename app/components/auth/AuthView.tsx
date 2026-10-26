@@ -4,6 +4,7 @@ import React, { memo, useEffect, useState } from 'react';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { AuthRequestError, login, register } from '../../lib/auth';
+import { useCryptoEnabled } from '../../lib/features';
 import type { AuthSession } from '../../types/auth';
 
 interface AuthViewProps {
@@ -12,7 +13,7 @@ interface AuthViewProps {
 
 const CAPABILITIES = [
   { term: 'Collections', detail: 'Dynamic NGN virtual accounts that expire in 30 minutes.' },
-  { term: 'Payouts', detail: 'USDT on TRON and fiat to any Nigerian bank, same balance.' },
+  { term: 'Payouts', detail: 'USDT on TRON and fiat to any Nigerian bank, same balance.', naira: 'Straight to any Nigerian bank account.' },
   { term: 'Ledger', detail: 'Double-entry postings with signed, replayable webhooks.' },
 ];
 
@@ -38,6 +39,7 @@ const BRAND_GRID_STYLE: React.CSSProperties = {
 };
 
 const BrandPanel = memo(function BrandPanel() {
+  const cryptoOn = useCryptoEnabled();
   return (
     // Desktop only — mobile goes straight to the form. The dark surface is
     // fixed brand styling, not the dark theme.
@@ -57,21 +59,21 @@ const BrandPanel = memo(function BrandPanel() {
 
       <div className="relative max-w-lg">
         <h1 className="text-4xl xl:text-[2.75rem] font-semibold tracking-tight leading-[1.1] text-white">
-          Naira and stablecoins on one balance sheet.
+          {cryptoOn ? 'Naira and stablecoins on one balance sheet.' : 'Collect and pay out naira, all in one place.'}
         </h1>
         <p className="mt-5 text-[15px] leading-relaxed text-slate-400">
           The merchant console for Fluxel&apos;s settlement rail — collections, payouts, and
-          reconciliation without running two treasuries.
+          reconciliation{cryptoOn ? ' without running two treasuries' : ''}.
         </p>
 
         <dl className="mt-12 border-t border-white/10">
-          {CAPABILITIES.map(({ term, detail }) => (
+          {CAPABILITIES.map(({ term, detail, naira }) => (
             <div
               key={term}
               className="grid grid-cols-[7.5rem_1fr] gap-6 py-4 border-b border-white/10"
             >
               <dt className="text-sm font-medium text-[#fed700]">{term}</dt>
-              <dd className="text-sm text-slate-400 leading-relaxed">{detail}</dd>
+              <dd className="text-sm text-slate-400 leading-relaxed">{!cryptoOn && naira ? naira : detail}</dd>
             </div>
           ))}
         </dl>

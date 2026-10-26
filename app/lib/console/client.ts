@@ -88,7 +88,18 @@ interface Entry {
   data?: unknown;
   error?: ConsoleError;
   loading: boolean;
+  /** Cached data that's out of date: kept, but not shown, until the refetch answers. */
+  stale?: boolean;
+  /** When the last successful answer arrived (ms). */
+  fetchedAt?: number;
 }
+
+/**
+ * An answer this recent counts as live, so a mount doesn't refetch it. Stops a
+ * component that only appears once its data has loaded from re-hiding that
+ * data on mount (and looping), and saves nested readers a duplicate request.
+ */
+const FRESH_MS = 2000;
 
 const entries = new Map<string, Entry>();
 const fetchers = new Map<string, () => Promise<unknown>>();
@@ -100,19 +111,25 @@ function set(key: string, entry: Entry) {
   listeners.forEach((l) => l());
 }
 
-function load(key: string): Promise<void> {
+/** `stale`: hide the cached data until this fetch answers, so nobody sees an old copy. */
+function load(key: string, { stale = false } = {}): Promise<void> {
+  const prev = entries.get(key);
   const running = inflight.get(key);
-  if (running) return running;
+  if (running) {
+    if (stale && prev && !prev.stale) set(key, { ...prev, stale: true });
+    return running;
+  }
   const fetcher = fetchers.get(key);
   if (!fetcher) return Promise.resolve();
-  const prev = entries.get(key);
-  set(key, { data: prev?.data, error: undefined, loading: true });
+  set(key, { data: prev?.data, error: undefined, loading: true, stale: stale || prev?.stale, fetchedAt: prev?.fetchedAt });
   const p = fetcher()
-    .then((data) => set(key, { data, loading: false }))
+    .then((data) => set(key, { data, loading: false, fetchedAt: Date.now() }))
     .catch((e: unknown) =>
       set(key, {
         data: prev?.data,
         loading: false,
+        stale: entries.get(key)?.stale,
+        fetchedAt: prev?.fetchedAt,
         error: e instanceof ConsoleError ? e : new ConsoleError(0, 'internal_error', 'Something went wrong.'),
       })
     )
@@ -129,13 +146,19 @@ const subscribe = (l: () => void) => {
 export interface Resource<T> {
   data: T | undefined;
   error: ConsoleError | undefined;
-  /** True only until the first answer — refreshes keep showing the old data. */
+  /** True until a fresh answer — on first load and each time a section opens. Refreshes after a change keep showing the old data. */
   loading: boolean;
   reload: () => Promise<void>;
 }
 
-/** Reads `key` through the shared cache, fetching it the first time it's needed. `null` key = skip. */
-export function useResource<T>(key: string | null, fetcher: () => Promise<T>): Resource<T> {
+/**
+ * Reads `key` through the shared cache. By default every component that
+ * mounts with a key refetches it and shows loading until the answer arrives,
+ * so opening a section always shows live data, never a copy from earlier.
+ * Pass `{ fresh: false }` for reference data that rarely changes (assets,
+ * banks, feature flags): those are fetched once and reused. `null` key = skip.
+ */
+export function useResource<T>(key: string | null, fetcher: () => Promise<T>, { fresh = true } = {}): Resource<T> {
   if (key) fetchers.set(key, fetcher);
   const entry = useSyncExternalStore(
     subscribe,
@@ -143,13 +166,17 @@ export function useResource<T>(key: string | null, fetcher: () => Promise<T>): R
     () => undefined
   );
   useEffect(() => {
-    if (key && !entries.has(key)) void load(key);
-  }, [key]);
+    if (!key) return;
+    const entry = entries.get(key);
+    if (!entry) void load(key);
+    else if (fresh && Date.now() - (entry.fetchedAt ?? 0) > FRESH_MS) void load(key, { stale: true });
+  }, [key, fresh]);
   const reload = useCallback(() => (key ? load(key) : Promise.resolve()), [key]);
+  const data = entry?.stale ? undefined : (entry?.data as T | undefined);
   return {
-    data: entry?.data as T | undefined,
+    data,
     error: entry?.error,
-    loading: Boolean(key) && (!entry || (entry.loading && entry.data === undefined)),
+    loading: Boolean(key) && (!entry || (entry.loading && data === undefined)),
     reload,
   };
 }

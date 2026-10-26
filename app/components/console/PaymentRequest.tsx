@@ -8,6 +8,7 @@ import type { CheckoutContext } from '../../lib/checkoutContext';
 import { dash, v1 } from '../../lib/console/client';
 import { formatRelative } from '../../lib/console/format';
 import { decimalsFor, toMinor } from '../../lib/console/money';
+import { useCryptoEnabled } from '../../lib/features';
 import type { Asset } from '../../lib/console/models';
 import CurrencyIcon from './CurrencyIcon';
 import { CopyField, Field, cx, inputClass } from './ui';
@@ -28,7 +29,10 @@ export const PAY_CURRENCIES = {
 
 export type PayCurrency = keyof typeof PAY_CURRENCIES;
 
+/** Hidden when crypto is switched off — naira is then the only choice. */
 export function CurrencyPicker({ value, onChange }: { value: PayCurrency; onChange: (c: PayCurrency) => void }) {
+  const cryptoOn = useCryptoEnabled();
+  if (!cryptoOn) return null;
   return (
     <div>
       <p className="text-sm font-medium text-ink-2 mb-2">Get paid in</p>

@@ -7,7 +7,14 @@
  * one the first time a link needs it and remembers it:
  *
  *   - in memory, shared by every signed-in user of the business on this server;
- *   - in a cookie bound to the business id, for after a restart.
+ *   - in a year-long cookie bound to the business id, for after a restart.
+ *
+ * The cookie outlives the login on purpose, "remember me" or not: losing it
+ * means minting another key, and the API allows only two per type — a
+ * browser-session cookie used to burn one every time the browser closed.
+ *
+ * At that limit the merchant can hand us a sandbox publishable key they
+ * already hold (`adoptPublishableKey`); we check it's one of theirs.
  *
  * It's never revoked on sign-out: links already sent to customers use it.
  * Publishable keys are read-only and public by design, so the cookie isn't
@@ -17,8 +24,7 @@
 import { cookies } from 'next/headers';
 
 import { IS_PRODUCTION } from './config';
-import { dashboardRequest, FluxelApiError } from './fluxelApi';
-import { readSession } from './session';
+import { apiRequest, dashboardRequest, FluxelApiError } from './fluxelApi';
 import { signedInActor } from './v1';
 
 interface CheckoutKey {
@@ -44,13 +50,12 @@ async function fromCookie(biz: string): Promise<CheckoutKey | null> {
 
 async function remember(key: CheckoutKey): Promise<void> {
   known.set(key.biz, key);
-  const { persist } = await readSession();
   (await cookies()).set(COOKIE, JSON.stringify(key), {
     httpOnly: true,
     sameSite: 'lax',
     secure: IS_PRODUCTION,
     path: '/',
-    ...(persist ? { maxAge: MAX_AGE } : {}),
+    maxAge: MAX_AGE,
   });
 }
 
@@ -66,7 +71,7 @@ async function create(biz: string): Promise<CheckoutKey> {
       throw new FluxelApiError(
         409,
         'checkout_key_limit',
-        'Checkout links need a sandbox publishable key, and your account already has the maximum of 2. Revoke one in Developers → API keys, then try again.'
+        'Checkout links need a sandbox publishable key. Your account already has the maximum of 2, and Fluxel only shows a key once, when it’s created — so paste one you saved, or revoke one in Developers → API keys.'
       );
     }
     throw cause;
@@ -98,4 +103,39 @@ export async function checkoutKeyIds(): Promise<string[]> {
   const { biz } = await signedInActor();
   const key = known.get(biz) ?? (await fromCookie(biz));
   return key ? [key.pkId] : [];
+}
+
+interface KeySummary {
+  id: string;
+  display_prefix: string;
+  last4: string;
+  env: string;
+  key_class: string;
+}
+
+/**
+ * Adopts a sandbox publishable key the merchant already has, for when the
+ * two-key limit stops us minting one. It must match one of this business's
+ * active keys (prefix + last four) and actually work against the API.
+ */
+export async function adoptPublishableKey(pk: string): Promise<void> {
+  const { biz } = await signedInActor();
+  const key = pk.trim();
+  const invalid = (message: string) => new FluxelApiError(422, 'validation_failed', message);
+  if (!/^pk_test_[A-Za-z0-9]+$/.test(key)) throw invalid('That isn’t a sandbox publishable key — it should start with pk_test_.');
+
+  const keys = await dashboardRequest<KeySummary[]>('/v1/dashboard/keys');
+  const match = keys.find(
+    (k) => k.key_class === 'publishable' && k.env === 'test' && key.startsWith(k.display_prefix) && key.endsWith(k.last4)
+  );
+  if (!match) throw invalid('That key doesn’t match any active sandbox publishable key on this account.');
+
+  try {
+    await apiRequest('/v1/payment-links?limit=1', { headers: { authorization: `Bearer ${key}` } });
+  } catch (cause) {
+    if (cause instanceof FluxelApiError && cause.status === 401) throw invalid('Fluxel didn’t accept that key. Check you copied all of it.');
+    throw cause;
+  }
+
+  await remember({ biz, pk: key, pkId: match.id });
 }

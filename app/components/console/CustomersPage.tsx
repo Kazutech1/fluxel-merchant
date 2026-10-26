@@ -16,6 +16,7 @@ import { formatRelative, titleCase } from '../../lib/console/format';
 import { CHAIN_LABEL } from '../../lib/console/money';
 import type { Balance, Customer, DepositIntent } from '../../lib/console/models';
 import { decimalsFor, toMajor, toMinor } from '../../lib/console/money';
+import { useCryptoEnabled } from '../../lib/features';
 import { can } from '../../lib/permissions';
 import CurrencyIcon from './CurrencyIcon';
 import type { PageProps } from './nav';
@@ -195,14 +196,18 @@ function RequestPaymentModal({
   );
 }
 
-/** Naira, USDT, Bitcoin and Ether always (zero if empty), then anything else the customer holds. */
-function balanceTiles(balances: Balance[]): { asset: string; label: string; available: string; pending: string }[] {
+/** Naira, USDT, Bitcoin and Ether always (zero if empty), then anything else the customer holds. Naira only with crypto off. */
+function balanceTiles(balances: Balance[], cryptoOn: boolean): { asset: string; label: string; available: string; pending: string }[] {
   const find = (codes: string[]) => balances.find((b) => codes.includes(b.asset_code));
   const main = [
     { asset: 'NGN', label: 'Naira', codes: ['NGN'] },
-    { asset: 'USDT-TRON', label: 'USDT', codes: ['USDT-TRON', 'USDT'] },
-    { asset: 'BTC', label: 'Bitcoin', codes: ['BTC'] },
-    { asset: 'ETH', label: 'Ether', codes: ['ETH'] },
+    ...(cryptoOn
+      ? [
+          { asset: 'USDT-TRON', label: 'USDT', codes: ['USDT-TRON', 'USDT'] },
+          { asset: 'BTC', label: 'Bitcoin', codes: ['BTC'] },
+          { asset: 'ETH', label: 'Ether', codes: ['ETH'] },
+        ]
+      : []),
   ];
   const shown = new Set(main.flatMap((m) => m.codes));
   return [
@@ -218,9 +223,10 @@ function balanceTiles(balances: Balance[]): { asset: string; label: string; avai
 
 function CustomerDrawer({ customer, props }: { customer: Customer; props: PageProps }) {
   const { role, notify, onOpenTxn, business } = props;
+  const cryptoOn = useCryptoEnabled();
   const { data: assets } = useAssets();
   const balances = useCustomerBalances(customer.id);
-  const addresses = useCustomerAddresses(customer.id);
+  const addresses = useCustomerAddresses(cryptoOn ? customer.id : null);
   const txns = useTransactions();
   const [requesting, setRequesting] = useState(false);
   const theirs = (txns.data ?? []).filter((t) => t.customer_id === customer.id || t.to_customer_id === customer.id);
@@ -261,6 +267,7 @@ function CustomerDrawer({ customer, props }: { customer: Customer; props: PagePr
         </div>
       )}
 
+
       <DetailList items={[{ term: 'Customer ID', detail: <span className="font-mono text-[13px] break-all">{customer.id}</span> }]} />
 
       <h3 className="mt-8 mb-3 text-sm font-semibold text-ink">Balances</h3>
@@ -268,7 +275,7 @@ function CustomerDrawer({ customer, props }: { customer: Customer; props: PagePr
         <p className="text-sm text-negative">{balances.error.message}</p>
       ) : (
         <div className="grid grid-cols-2 gap-2">
-          {balanceTiles(balances.data ?? []).map((t) => (
+          {balanceTiles(balances.data ?? [], cryptoOn).map((t) => (
             <div key={t.asset} className="rounded-xl border border-line p-3.5">
               <div className="flex items-center gap-2">
                 <CurrencyIcon asset={t.asset} className="size-6" />
@@ -294,20 +301,24 @@ function CustomerDrawer({ customer, props }: { customer: Customer; props: PagePr
         </div>
       )}
 
-      <h3 className="mt-8 mb-1 text-sm font-semibold text-ink">Crypto deposit addresses</h3>
-      <p className="mb-3 text-xs text-ink-3">Anything this customer sends to these lands in their balance.</p>
-      {addresses.loading ? (
-        <p className="text-sm text-ink-3">Loading…</p>
-      ) : (addresses.data ?? []).length === 0 ? (
-        <p className="text-sm text-ink-3">Their wallets are still being set up — check back in a minute.</p>
-      ) : (
-        <div className="space-y-3">
-          {addresses.data!.map((a) => (
-            <Field key={a.chain} label={CHAIN_LABEL[a.chain] ?? titleCase(a.chain)}>
-              <CopyField value={a.address} />
-            </Field>
-          ))}
-        </div>
+      {cryptoOn && (
+        <>
+          <h3 className="mt-8 mb-1 text-sm font-semibold text-ink">Crypto deposit addresses</h3>
+          <p className="mb-3 text-xs text-ink-3">Anything this customer sends to these lands in their balance.</p>
+          {addresses.loading ? (
+            <p className="text-sm text-ink-3">Loading…</p>
+          ) : (addresses.data ?? []).length === 0 ? (
+            <p className="text-sm text-ink-3">Their wallets are still being set up — check back in a minute.</p>
+          ) : (
+            <div className="space-y-3">
+              {addresses.data!.map((a) => (
+                <Field key={a.chain} label={CHAIN_LABEL[a.chain] ?? titleCase(a.chain)}>
+                  <CopyField value={a.address} />
+                </Field>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <h3 className="mt-8 mb-2 text-sm font-semibold text-ink">Transactions</h3>

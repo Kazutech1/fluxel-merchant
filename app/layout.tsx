@@ -25,7 +25,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 const DESCRIPTION =
-  "Collect naira and stablecoin payments, pay out to any Nigerian bank, and reconcile it all in one place.";
+  "Collect naira payments, pay out to any Nigerian bank, and reconcile it all in one place.";
 
 // Icons come from the file conventions in app/: favicon.ico (16/32/48),
 // icon.png (512) and apple-icon.png (180), all cut from the Fluxel mark.
@@ -49,13 +49,16 @@ export const viewport: Viewport = {
 /**
  * Applies the stored theme (light unless dark was chosen) before first paint.
  * Without this the theme is only set in a useEffect, so a cold load in dark
- * mode — most visibly the checkout, always opened fresh from a link — paints
- * light and then snaps to dark.
+ * mode paints light and then snaps to dark.
+ *
+ * The hosted checkout (`/pay/*`) is always light, on every device: customers
+ * see it, not merchants, so the merchant's own dark-mode choice never applies.
  */
 const THEME_BOOTSTRAP = `
 (function(){try{
   var t = localStorage.getItem('fluxel_theme');
-  document.documentElement.classList.toggle('dark', t === 'dark');
+  var checkout = location.pathname.indexOf('/pay/') === 0;
+  document.documentElement.classList.toggle('dark', t === 'dark' && !checkout);
 }catch(e){}})();
 `;
 
