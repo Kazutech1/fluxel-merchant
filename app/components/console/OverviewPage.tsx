@@ -16,6 +16,7 @@ import { DAY_MS, startOfDay } from '../../lib/console/format';
 import { decimalsFor, formatMajor, toMajor } from '../../lib/console/money';
 import type { Asset, AssetTotal, Balance } from '../../lib/console/models';
 import { useNow } from '../../lib/console/useNow';
+import { useCryptoEnabled } from '../../lib/features';
 import { can } from '../../lib/permissions';
 import BarChart from './BarChart';
 import CurrencyIcon from './CurrencyIcon';
@@ -70,6 +71,7 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
   const from = useMemo(() => new Date(startOfDay(now) - 29 * DAY_MS).toISOString(), [now]);
   const to = useMemo(() => new Date(startOfDay(now) + DAY_MS).toISOString(), [now]);
 
+  const cryptoOn = useCryptoEnabled();
   const assets = useAssets();
   const txns = useTransactions();
   const customers = useCustomers();
@@ -160,7 +162,7 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
 
       <div className="grid gap-4 lg:grid-cols-5">
         {/* Naira balance — the black-and-gold card */}
-        <div className="lg:col-span-3 relative overflow-hidden rounded-xl bg-[#0a0a0b] text-white p-6 flex flex-col ring-1 ring-white/5 min-h-[220px]">
+        <div className={cx(cryptoOn ? 'lg:col-span-3' : 'lg:col-span-5', 'relative overflow-hidden rounded-xl bg-[#0a0a0b] text-white p-6 flex flex-col ring-1 ring-white/5 min-h-[220px]')}>
           <div aria-hidden className="absolute inset-0 opacity-[0.06]" style={CARD_GRID} />
           <div aria-hidden className="absolute -top-20 -right-16 size-56 rounded-full bg-brand/15 blur-3xl" />
           <div className="relative flex items-center justify-between">
@@ -204,26 +206,28 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
         </div>
 
         {/* Crypto balances */}
-        <Card className="lg:col-span-2 overflow-hidden flex flex-col">
-          <CardHeader title="Crypto balances" />
-          <div className="border-t border-line flex-1">
-            {balances.loading ? (
-              <LoadingRows rows={3} />
-            ) : crypto.length === 0 ? (
-              <EmptyState title="No crypto yet" description="Stablecoin and crypto deposits show up here." />
-            ) : (
-              <ul className="divide-y divide-line">
-                {crypto.map((b) => (
-                  <li key={b.asset_code} className="flex items-center gap-3 px-5 py-3">
-                    <CurrencyIcon asset={b.asset_code} className="size-8" />
-                    <span className="flex-1 text-sm text-ink">{b.asset_code}</span>
-                    <Money minor={b.total} asset={b.asset_code} assets={assets.data} className="text-sm font-medium text-ink" />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </Card>
+        {cryptoOn && (
+          <Card className="lg:col-span-2 overflow-hidden flex flex-col">
+            <CardHeader title="Crypto balances" />
+            <div className="border-t border-line flex-1">
+              {balances.loading ? (
+                <LoadingRows rows={3} />
+              ) : crypto.length === 0 ? (
+                <EmptyState title="No crypto yet" description="Stablecoin and crypto deposits show up here." />
+              ) : (
+                <ul className="divide-y divide-line">
+                  {crypto.map((b) => (
+                    <li key={b.asset_code} className="flex items-center gap-3 px-5 py-3">
+                      <CurrencyIcon asset={b.asset_code} className="size-8" />
+                      <span className="flex-1 text-sm text-ink">{b.asset_code}</span>
+                      <Money minor={b.total} asset={b.asset_code} assets={assets.data} className="text-sm font-medium text-ink" />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
 
       <Card className="mt-4 grid grid-cols-2 lg:grid-cols-4">

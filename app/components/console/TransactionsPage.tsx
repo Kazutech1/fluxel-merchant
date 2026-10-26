@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Download, Search } from 'lucide-react';
 
+import { useCryptoEnabled } from '../../lib/features';
 import { useAssets, useCustomers, useTransactions } from '../../lib/console/data';
 import { formatDateTime, formatWhen, titleCase } from '../../lib/console/format';
 import { decimalsFor, toMajor } from '../../lib/console/money';
@@ -18,6 +19,7 @@ const selectClass = cx(controlClass, 'h-10 !w-auto pr-8 cursor-pointer');
 export default function TransactionsPage({ onOpenTxn }: PageProps) {
   const txns = useTransactions();
   const { data: customers } = useCustomers();
+  const cryptoOn = useCryptoEnabled();
   const { data: assets } = useAssets();
   const [query, setQuery] = useState('');
   const [direction, setDirection] = useState<Direction>('all');
@@ -51,7 +53,7 @@ export default function TransactionsPage({ onOpenTxn }: PageProps) {
 
   const exportCsv = () =>
     downloadCsv(`fluxel-transactions-${new Date().toISOString().slice(0, 10)}.csv`, [
-      ['Date', 'ID', 'Type', 'Description', 'Asset', 'Amount', 'Fee', 'Status', 'Bank reference', 'Blockchain hash'],
+      ['Date', 'ID', 'Type', 'Description', 'Asset', 'Amount', 'Fee', 'Status', 'Bank reference', ...(cryptoOn ? ['Blockchain hash'] : [])],
       ...filtered.map((t) => {
         const d = decimalsFor(t.asset_code, assets);
         return [
@@ -64,7 +66,7 @@ export default function TransactionsPage({ onOpenTxn }: PageProps) {
           toMajor(t.fee, d),
           t.status,
           t.provider_ref ?? '',
-          t.txid ?? '',
+          ...(cryptoOn ? [t.txid ?? ''] : []),
         ];
       }),
     ]);

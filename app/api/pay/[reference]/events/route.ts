@@ -14,6 +14,7 @@
  */
 
 import { apiUrl } from '@/app/lib/server/config';
+import { isCryptoDisabled } from '@/app/lib/server/features';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -29,8 +30,9 @@ function error(status: number, code: string, message: string) {
 
 export async function GET(request: Request, { params }: { params: Promise<{ reference: string }> }) {
   const { reference } = await params;
-  const base = PATHS[reference.split('_')[0]];
-  if (!base) return error(404, 'not_found', 'Unknown payment reference.');
+  const prefix = reference.split('_')[0];
+  const base = PATHS[prefix];
+  if (!base || (prefix === 'cdi' && (await isCryptoDisabled()))) return error(404, 'not_found', 'Unknown payment reference.');
 
   const pk = request.headers.get('x-fluxel-pk') ?? '';
   if (!pk.startsWith('pk_')) {

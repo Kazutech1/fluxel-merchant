@@ -121,6 +121,31 @@ export function Button({
   );
 }
 
+/** A link styled as a Button — for navigation, e.g. opening a page in a new tab. */
+export function LinkButton({
+  variant = 'secondary',
+  size = 'md',
+  className,
+  children,
+  ...rest
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
+  return (
+    <a
+      className={cx(
+        'inline-flex items-center justify-center rounded-lg font-medium whitespace-nowrap',
+        'transition-[background-color,color,transform] duration-150 active:scale-[0.98]',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold',
+        BUTTON_VARIANTS[variant],
+        BUTTON_SIZES[size],
+        className
+      )}
+      {...rest}
+    >
+      {children}
+    </a>
+  );
+}
+
 /** Field styling without a height, for controls that set their own. */
 export const controlClass =
   'w-full px-3.5 rounded-lg bg-surface border border-line-strong text-base sm:text-sm text-ink ' +
@@ -649,6 +674,21 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
     >
       {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
     </button>
+  );
+}
+
+/** Dark code panel with a copy button. `header` sits in a bar above the code (e.g. language tabs). */
+export function CodeBlock({ code, header }: { code: string; header?: React.ReactNode }) {
+  return (
+    <div className="relative rounded-lg bg-[#0a0a0b] dark:bg-subtle border border-white/10 dark:border-line-strong overflow-hidden">
+      {header && <div className="flex items-center gap-1 h-10 pl-2 pr-12 border-b border-white/10 overflow-x-auto">{header}</div>}
+      <div className="absolute right-2 top-1 [&_button]:text-slate-400 [&_button:hover]:text-brand [&_button:hover]:bg-white/5">
+        <CopyButton value={code} label="Copy code" />
+      </div>
+      <pre className={cx('overflow-x-auto p-4 text-[12.5px] leading-relaxed font-mono text-slate-200', !header && 'pr-12')}>
+        <code>{code}</code>
+      </pre>
+    </div>
   );
 }
 

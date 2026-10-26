@@ -62,14 +62,14 @@ export function can(role: string | undefined, permission: Permission): boolean {
   return grants === 'all' || grants.includes(permission);
 }
 
-/** For the roles table in Settings → Team. */
-export const PERMISSION_ROWS: { label: string; permission: Permission }[] = [
+/** For the roles table in Settings → Team. `crypto` rows hide when crypto is switched off. */
+export const PERMISSION_ROWS: { label: string; permission: Permission; crypto?: boolean }[] = [
   { label: 'See balances', permission: 'balances.read' },
   { label: 'See transactions, refunds and disputes', permission: 'transactions.read' },
   { label: 'See customers and payment links', permission: 'customers.read' },
   { label: 'Create customers, payment links and payment requests', permission: 'customers.write' },
   { label: 'Withdraw to bank (payouts)', permission: 'payouts.write' },
-  { label: 'Crypto withdrawals', permission: 'withdrawals.write' },
+  { label: 'Crypto withdrawals', permission: 'withdrawals.write', crypto: true },
   { label: 'Transfers between customers', permission: 'transfers.write' },
   { label: 'Manage webhooks', permission: 'webhooks.manage' },
   { label: 'Manage API keys', permission: 'keys.manage' },

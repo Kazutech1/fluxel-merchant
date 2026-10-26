@@ -14,6 +14,7 @@ import { can, permissionForV1 } from '@/app/lib/permissions';
 import { signedInActor, v1Request } from '@/app/lib/server/v1';
 import { errorResponse } from '@/app/lib/server/dashboardSession';
 import { FluxelApiError, isRouteClosedToDashboard } from '@/app/lib/server/fluxelApi';
+import { isCryptoDisabled, isCryptoPath } from '@/app/lib/server/features';
 
 type Ctx = { params: Promise<{ path: string[] }> };
 
@@ -27,6 +28,9 @@ async function handle(request: Request, ctx: Ctx): Promise<Response> {
   const subpath = path.map(encodeURIComponent).join('/');
   const permission = permissionForV1(request.method, subpath);
   if (!permission) return refuse(404, 'not_found', 'This endpoint is not available from the dashboard.');
+  if (isCryptoPath(subpath) && (await isCryptoDisabled())) {
+    return refuse(404, 'not_found', 'This endpoint is not available from the dashboard.');
+  }
 
   try {
     const actor = await signedInActor();

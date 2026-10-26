@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { KeyRound, Plus, RefreshCw, RotateCw, Send, ShieldCheck, Trash2 } from 'lucide-react';
+import { BookOpen, ExternalLink, KeyRound, Plus, RefreshCw, RotateCw, Send, ShieldCheck, Trash2 } from 'lucide-react';
 
 import { dash, invalidate, v1 } from '../../lib/console/client';
 import { useApiKeys, useConsoleMeta, useWebhookDeliveries, useWebhookEndpoints } from '../../lib/console/data';
 import { WEBHOOK_EVENT_GROUPS, type DashboardKey, type Env, type WebhookEndpoint } from '../../lib/console/models';
+import { useCryptoEnabled } from '../../lib/features';
 import { can } from '../../lib/permissions';
 import type { PageProps } from './nav';
 import AllowlistModal from './AllowlistModal';
@@ -14,12 +15,13 @@ import {
   Button,
   Card,
   CardHeader,
-  CopyButton,
+  CodeBlock,
   CopyField,
   Drawer,
   EmptyState,
   ErrorState,
   Field,
+  LinkButton,
   LoadingRows,
   Modal,
   PageHeader,
@@ -32,19 +34,6 @@ import {
 } from './ui';
 
 type Tab = 'keys' | 'webhooks';
-
-function CodeBlock({ code }: { code: string }) {
-  return (
-    <div className="relative rounded-lg bg-[#0a0a0b] border border-white/10">
-      <div className="absolute right-2 top-2 [&_button]:text-slate-400 [&_button:hover]:text-brand [&_button:hover]:bg-white/5">
-        <CopyButton value={code} label="Copy code" />
-      </div>
-      <pre className="overflow-x-auto p-4 pr-12 text-[12.5px] leading-relaxed font-mono text-slate-200">
-        <code>{code}</code>
-      </pre>
-    </div>
-  );
-}
 
 /** Shown once, right after a secret is created. */
 function SecretOnce({ title, value, note, onClose }: { title: string; value: string; note: string; onClose: () => void }) {
@@ -298,8 +287,10 @@ function KeysTab({ role, business, notify }: PageProps) {
 /* ------------------------------------------------------------------ */
 
 function AddEndpointModal({ onClose, onCreated }: { onClose: () => void; onCreated: (secret: string) => void }) {
+  const cryptoOn = useCryptoEnabled();
+  const groups = cryptoOn ? WEBHOOK_EVENT_GROUPS : WEBHOOK_EVENT_GROUPS.filter((g) => !g.crypto);
   const [url, setUrl] = useState('https://');
-  const [events, setEvents] = useState<string[]>(['fiat.deposit.settled', 'crypto.deposit.confirmed']);
+  const [events, setEvents] = useState<string[]>(['fiat.deposit.settled']);
   const [error, setError] = useState<string | null>(null);
   const valid = /^https:\/\/[^\s/]+\.[^\s]+/.test(url.trim()) && events.length > 0;
 
@@ -337,7 +328,7 @@ function AddEndpointModal({ onClose, onCreated }: { onClose: () => void; onCreat
           <input id="wh-url" value={url} onChange={(e) => setUrl(e.target.value)} spellCheck={false} className={cx(inputClass, 'font-mono text-[13px]')} />
         </Field>
         <div className="grid sm:grid-cols-2 gap-5">
-          {WEBHOOK_EVENT_GROUPS.map((g) => (
+          {groups.map((g) => (
             <fieldset key={g.label}>
               <legend className="text-sm font-medium text-ink-2 mb-1.5">{g.label}</legend>
               {g.events.map((ev) => (
@@ -537,7 +528,17 @@ export default function DevelopersPage(props: PageProps) {
 
   return (
     <>
-      <PageHeader title="Developers" description="API keys and webhooks for your integration." />
+      <PageHeader
+        title="Developers"
+        description="API keys and webhooks for your integration."
+        actions={
+          <LinkButton href="/docs" target="_blank" rel="noopener">
+            <BookOpen className="size-4" />
+            Docs
+            <ExternalLink className="size-3.5 text-ink-3" />
+          </LinkButton>
+        }
+      />
       <Tabs<Tab>
         label="Developer sections"
         value={tab}

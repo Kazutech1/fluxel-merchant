@@ -6,6 +6,7 @@
  */
 
 import { ConsoleError, dash, useResource, v1 } from './client';
+import { cryptoDisabled, isFiatAsset } from '../features';
 import type {
   ApiTransaction,
   Asset,
@@ -31,8 +32,15 @@ import type {
 
 const LIMIT = 100;
 
-export const useAssets = () => useResource(`assets`, () => v1.get<Asset[]>('assets'));
-export const useBalances = () => useResource(`balances`, () => v1.get<Balance[]>('balances'));
+/** With crypto switched off, only naira rows reach the pages. */
+async function fiatOnly<T>(rows: T[], code: (row: T) => string): Promise<T[]> {
+  return (await cryptoDisabled()) ? rows.filter((r) => isFiatAsset(code(r))) : rows;
+}
+
+export const useAssets = () =>
+  useResource(`assets`, async () => fiatOnly(await v1.get<Asset[]>('assets'), (a) => a.asset_code), { fresh: false });
+export const useBalances = () =>
+  useResource(`balances`, async () => fiatOnly(await v1.get<Balance[]>('balances'), (b) => b.asset_code));
 
 /**
  * Money in, money out and transfers. Fiat rows come back as `kind: "fiat"`
@@ -47,7 +55,8 @@ export const useTransactions = () =>
       v1.get<Page<ApiTransaction>>('transactions', { kind: 'transfer', limit: LIMIT }),
     ]);
     const tag = (rows: ApiTransaction[], direction: Txn['direction']) => rows.map((t) => ({ ...t, direction }));
-    return [...tag(deposits.data, 'in'), ...tag(payouts.data, 'out'), ...tag(transfers.data, 'transfer')].sort(
+    const all = [...tag(deposits.data, 'in'), ...tag(payouts.data, 'out'), ...tag(transfers.data, 'transfer')];
+    return (await fiatOnly(all, (t) => t.asset_code)).sort(
       (a, b) => Date.parse(b.created_at ?? '0') - Date.parse(a.created_at ?? '0')
     );
   });
@@ -56,7 +65,9 @@ export const useCustomers = () => useResource(`customers`, () => v1.get<Customer
 export const useCustomerAddresses = (id: string | null) =>
   useResource(id ? `customers:${id}:addresses` : null, () => v1.get<CustomerAddress[]>(`customers/${id}/addresses`));
 export const useCustomerBalances = (id: string | null) =>
-  useResource(id ? `customers:${id}:balances` : null, () => v1.get<Balance[]>(`customers/${id}/balances`));
+  useResource(id ? `customers:${id}:balances` : null, async () =>
+    fiatOnly(await v1.get<Balance[]>(`customers/${id}/balances`), (b) => b.asset_code)
+  );
 
 /** Per-asset sum of every customer's ledger balance, minor units as decimal strings. */
 export interface CustomerBalanceTotal {
@@ -105,7 +116,7 @@ export const useCustomerBalancesTotal = () =>
       }
     }
 
-    return [...sums.entries()]
+    const totals = [...sums.entries()]
       .map(([asset_code, s]) => ({
         asset_code,
         available: s.available.toString(),
@@ -114,6 +125,7 @@ export const useCustomerBalancesTotal = () =>
         holders: s.holders,
       }))
       .sort((a, b) => (a.asset_code === 'NGN' ? -1 : b.asset_code === 'NGN' ? 1 : a.asset_code.localeCompare(b.asset_code)));
+    return fiatOnly(totals, (t) => t.asset_code);
   });
 
 export const usePaymentLinks = () =>
@@ -146,7 +158,15 @@ export const useStaticAccount = () =>
   });
 
 export const useSettlementSummary = (from: string, to: string) =>
-  useResource(`summary:${from}:${to}`, () => v1.get<SettlementSummary>('reports/settlement-summary', { from, to }));
+  useResource(`summary:${from}:${to}`, async (): Promise<SettlementSummary> => {
+    const s = await v1.get<SettlementSummary>('reports/settlement-summary', { from, to });
+    const code = (r: { asset_code: string }) => r.asset_code;
+    return {
+      deposits: await fiatOnly(s.deposits ?? [], code),
+      payouts: await fiatOnly(s.payouts ?? [], code),
+      transfers: await fiatOnly(s.transfers ?? [], code),
+    };
+  });
 
 /** The bank list comes from the payout provider; fall back to CBN codes when it's unreachable. */
 export const useBanks = () =>
@@ -162,14 +182,14 @@ export const useBanks = () =>
       /* fall through */
     }
     return { banks: CBN_BANKS, fallback: true };
-  });
+  }, { fresh: false });
 
 export const useConsoleMeta = () =>
-  useResource('console', () => dash.get<{ keyIds: string[]; apiBase: string }>('console'));
+  useResource('console', () => dash.get<{ keyIds: string[]; apiBase: string }>('console'), { fresh: false });
 
 /** The console's publishable key, for checkout links — minted the first time it's asked for. */
 export const usePublishableKey = (enabled = true) =>
-  useResource(enabled ? 'console:pk' : null, async () => (await dash.get<{ publishableKey: string }>('console?publishable=1')).publishableKey);
+  useResource(enabled ? 'console:pk' : null, async () => (await dash.get<{ publishableKey: string }>('console?publishable=1')).publishableKey, { fresh: false });
 
 /* Dashboard-session data */
 

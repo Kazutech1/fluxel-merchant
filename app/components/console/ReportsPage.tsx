@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Download, FileText } from 'lucide-react';
 
+import { useCryptoEnabled } from '../../lib/features';
 import { useAssets, useCustomers, useSettlementSummary, useTransactions } from '../../lib/console/data';
 import { DAY_MS, formatDateTime, startOfDay } from '../../lib/console/format';
 import { decimalsFor, toMajor } from '../../lib/console/money';
@@ -49,6 +50,7 @@ export default function ReportsPage({ notify }: PageProps) {
 
   const summary = useSettlementSummary(from, to);
   const txns = useTransactions();
+  const cryptoOn = useCryptoEnabled();
   const { data: assets } = useAssets();
   const { data: customers } = useCustomers();
   const ngnDecimals = decimalsFor('NGN', assets);
@@ -81,7 +83,7 @@ export default function ReportsPage({ notify }: PageProps) {
 
   const statement = (m: (typeof months)[number]) => {
     downloadCsv(`fluxel-statement-${m.label.toLowerCase().replace(' ', '-')}.csv`, [
-      ['Date', 'ID', 'Type', 'Description', 'Asset', 'Amount', 'Fee', 'Status', 'Bank reference', 'Blockchain hash'],
+      ['Date', 'ID', 'Type', 'Description', 'Asset', 'Amount', 'Fee', 'Status', 'Bank reference', ...(cryptoOn ? ['Blockchain hash'] : [])],
       ...m.rows
         .slice()
         .reverse()
@@ -97,7 +99,7 @@ export default function ReportsPage({ notify }: PageProps) {
             toMajor(t.fee, d),
             t.status,
             t.provider_ref ?? '',
-            t.txid ?? '',
+            ...(cryptoOn ? [t.txid ?? ''] : []),
           ];
         }),
     ]);

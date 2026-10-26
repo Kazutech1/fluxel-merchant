@@ -25,10 +25,13 @@ import { CheckoutCard, CheckoutSkeleton } from './LiveCheckout';
 
 interface CheckoutClientProps {
   reference: string;
+  /** Crypto switched off platform-wide: a crypto demo session reads as not found. */
+  cryptoDisabled: boolean;
 }
 
-export default function CheckoutClient({ reference }: CheckoutClientProps) {
-  const session = usePaymentSession(reference);
+export default function CheckoutClient({ reference, cryptoDisabled }: CheckoutClientProps) {
+  const stored = usePaymentSession(reference);
+  const session = stored && cryptoDisabled && isCryptoAsset(stored.asset_code) ? undefined : stored;
 
   // The store reads from localStorage, which isn't available during SSR or the
   // hydration render — without this guard the page flashes "not found" first.

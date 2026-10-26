@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Fluxel Merchant Console',
     short_name: 'Fluxel',
-    description: 'Collect naira and stablecoin payments, pay out to any Nigerian bank, and reconcile it all in one place.',
+    description: 'Collect naira payments, pay out to any Nigerian bank, and reconcile it all in one place.',
     start_url: '/',
     display: 'standalone',
     background_color: '#0a0a0b',
