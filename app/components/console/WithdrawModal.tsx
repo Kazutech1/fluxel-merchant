@@ -4,7 +4,7 @@ import React, { useRef, useState } from 'react';
 import { ArrowDown, Building2, Check, ChevronDown, Loader2, Plus } from 'lucide-react';
 
 import { invalidate, v1 } from '../../lib/console/client';
-import { bankName, useAssets, useBalances, useBanks, usePayoutAccounts } from '../../lib/console/data';
+import { bankName, fetchFeePreview, useAssets, useBalances, useBanks, useFeePreview, usePayoutAccounts } from '../../lib/console/data';
 import { maskAccount } from '../../lib/console/format';
 import { decimalsFor, formatMajor, toMajor, toMinor } from '../../lib/console/money';
 import type { PayoutAccount } from '../../lib/console/models';
@@ -18,6 +18,7 @@ interface PayoutResult {
   id: string;
   status: string;
   amount: string;
+  fee?: string;
 }
 
 /** "1234567.5" → "1,234,567.5" — keeps whatever decimals the user has typed. */
@@ -99,11 +100,18 @@ function WithdrawFlow({
   const input = useRef<HTMLInputElement>(null);
 
   const decimals = decimalsFor('NGN', assets);
-  const available = toMajor(balances.data?.find((b) => b.asset_code === 'NGN')?.available ?? '0', decimals);
+  const availableMinor = balances.data?.find((b) => b.asset_code === 'NGN')?.available ?? '0';
+  const available = toMajor(availableMinor, decimals);
   const list = accounts.data ?? [];
   const account: PayoutAccount | undefined = list.find((a) => a.id === accountId) ?? list[0];
   const amount = Number(raw) || 0;
   const minor = toMinor(raw, decimals);
+  // The fee is charged on top of the amount: the bank gets `amount`, the balance loses `net_amount`.
+  const preview = useFeePreview('withdrawal', minor);
+  const quote = preview.data;
+  const fee = quote ? toMajor(quote.fee, decimals) : 0;
+  const total = quote ? toMajor(quote.net_amount, decimals) : amount;
+  const feePending = Boolean(minor) && !quote && !preview.error;
 
   const problem = !amount
     ? 'Enter how much to withdraw.'
@@ -111,9 +119,23 @@ function WithdrawFlow({
       ? 'Use at most two decimal places.'
       : amount > available + 1e-9
         ? 'That’s more than your available balance.'
-        : !account
-          ? 'Add a bank account to withdraw to.'
-          : null;
+        : quote && BigInt(quote.net_amount) > BigInt(availableMinor)
+          ? `With the ${formatMajor(fee, 'NGN')} fee, that’s more than your available balance.`
+          : !account
+            ? 'Add a bank account to withdraw to.'
+            : null;
+
+  /** The most that can go out once the fee is added on top. */
+  const fillMax = async () => {
+    setRaw(String(available));
+    try {
+      const q = await fetchFeePreview('withdrawal', availableMinor);
+      const rest = BigInt(availableMinor) - BigInt(q.fee);
+      setRaw(rest > BigInt(0) ? String(toMajor(rest.toString(), decimals)) : '');
+    } catch {
+      // Leave the full balance in; the fee line below says if it couldn't be checked.
+    }
+  };
 
   const send = async () => {
     if (!account || !minor) return;
@@ -159,6 +181,7 @@ function WithdrawFlow({
         </div>
         <dl className="mt-6 rounded-xl border border-line px-4 divide-y divide-line">
           <Row label="Status">{result ? <StatusBadge status={result.status} /> : '—'}</Row>
+          {result?.fee !== undefined && <Row label="Fee">{formatMajor(toMajor(result.fee, decimals), 'NGN')}</Row>}
           <Row label="To">
             {bankName(account.bank_code, banks.data?.banks)} {maskAccount(account.account_number)}
           </Row>
@@ -228,7 +251,13 @@ function WithdrawFlow({
             </div>
           </div>
           <dl className="px-5 py-1 border-t border-line divide-y divide-line">
-            <Row label="Balance after">{formatMajor(available - amount, 'NGN')}</Row>
+            <Row label="Fee">{quote ? formatMajor(fee, 'NGN') : 'Couldn’t be checked'}</Row>
+            {quote && (
+              <Row label="Total from balance" strong>
+                {formatMajor(total, 'NGN')}
+              </Row>
+            )}
+            <Row label="Balance after">{formatMajor(available - total, 'NGN')}</Row>
           </dl>
         </div>
         {error && (
@@ -256,7 +285,7 @@ function WithdrawFlow({
           <Button
             variant="primary"
             className="sm:min-w-32"
-            disabled={list.length === 0}
+            disabled={list.length === 0 || feePending}
             onClick={() => {
               setTouched(true);
               if (problem) {
@@ -322,7 +351,7 @@ function WithdrawFlow({
             <button
               key={label as string}
               type="button"
-              onClick={() => setRaw(String(Math.floor(available * (f as number) * 100) / 100))}
+              onClick={() => (f === 1 ? void fillMax() : setRaw(String(Math.floor(available * (f as number) * 100) / 100)))}
               className="h-7 px-2.5 rounded-md border border-line text-xs font-medium text-ink-2 hover:border-gold hover:text-ink cursor-pointer transition-colors"
             >
               {label}
@@ -330,7 +359,19 @@ function WithdrawFlow({
           ))}
         </div>
       </div>
-      {showError && problem !== 'Add a bank account to withdraw to.' && <p className="mt-2 text-xs text-negative">{problem}</p>}
+      {showError && problem !== 'Add a bank account to withdraw to.' ? (
+        <p className="mt-2 text-xs text-negative">{problem}</p>
+      ) : (
+        minor && (
+          <p className="mt-2 text-xs text-ink-3 tabular-nums" aria-live="polite">
+            {quote
+              ? `Fee ${formatMajor(fee, 'NGN')} · ${formatMajor(total, 'NGN')} leaves your balance`
+              : preview.error
+                ? 'Couldn’t check the fee right now. Any fee is added on top when you withdraw.'
+                : 'Checking the fee…'}
+          </p>
+        )
+      )}
 
       <p className="text-sm font-medium text-ink mt-6 mb-2">To</p>
       {accounts.loading ? (

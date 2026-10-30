@@ -14,9 +14,7 @@ import React, { createContext, useContext, useState, useSyncExternalStore } from
 import Link from 'next/link';
 import {
   ArrowLeft,
-  ArrowLeftRight,
   ArrowRight,
-  Banknote,
   Bitcoin,
   BookOpen,
   CircleAlert,
@@ -27,7 +25,6 @@ import {
   Landmark,
   LayoutDashboard,
   Lightbulb,
-  Link2,
   ListTree,
   Moon,
   Radio,
@@ -56,11 +53,8 @@ type SectionId =
   | 'requests'
   | 'errors'
   | 'naira'
-  | 'payment-links'
   | 'crypto'
-  | 'payouts'
   | 'withdrawals'
-  | 'transfers'
   | 'webhooks'
   | 'events'
   | 'reference';
@@ -94,11 +88,8 @@ const GROUPS: { label: string; items: SectionMeta[] }[] = [
     label: 'Guides',
     items: [
       { id: 'naira', title: 'Accept Naira payments', icon: Landmark },
-      { id: 'payment-links', title: 'Payment links', icon: Link2 },
       { id: 'crypto', title: 'Accept crypto', icon: Bitcoin, crypto: true },
-      { id: 'payouts', title: 'Pay out to a bank', icon: Banknote },
       { id: 'withdrawals', title: 'Crypto withdrawals', icon: Send, crypto: true },
-      { id: 'transfers', title: 'Transfers between customers', icon: ArrowLeftRight },
     ],
   },
   {
@@ -385,17 +376,17 @@ function Introduction() {
         : 'Take Naira by bank transfer to a one-time account number that Fluxel creates for each payment.',
     },
     {
-      icon: Banknote,
-      title: 'Move money',
-      body: crypto ? 'Pay out to any Nigerian bank, send crypto to a wallet, or move money between your customers.' : 'Pay out to any Nigerian bank, or move money between your customers.',
+      icon: Coins,
+      title: 'Track balances',
+      body: 'Every settled deposit is credited automatically. Query customer and business balances or full deposit and transaction history anytime.',
     },
-    { icon: Webhook, title: 'Stay in sync', body: 'Fluxel sends signed webhooks to your server when money arrives or leaves, so you never need to guess.' },
+    { icon: Webhook, title: 'Stay in sync', body: 'Fluxel sends signed webhooks to your server the moment a payment arrives, so you never need to guess.' },
   ];
   return (
     <>
       <Lead>
-        The Fluxel API lets your app collect payments, hold a balance for each of your customers, and pay money out — all from your own server with a few
-        simple HTTP calls. This guide walks you through everything, step by step.
+        The Fluxel API lets your app accept payments, track customer and business balances, and receive real-time payment notifications — all from your own
+        server with a few simple HTTP calls. This guide walks you through everything, step by step.
       </Lead>
 
       <H2>How it fits together</H2>
@@ -438,6 +429,7 @@ function Introduction() {
 }
 
 function QuickStart() {
+  const { crypto } = useDocs();
   return (
     <>
       <Lead>Take a test payment of ₦2,500 from start to finish. Everything here runs in sandbox — no real money moves.</Lead>
@@ -458,7 +450,7 @@ function QuickStart() {
             method="POST"
             path="/customers"
             body={{ external_id: 'user_1042', name: 'Ada Lovelace', email: 'ada@example.com' }}
-            response={{ id: 'cus_01JC4Z8X2M7Q', status: 'active', wallets: 'provisioning' }}
+            response={{ id: 'cus_01JC4Z8X2M7Q', status: 'active', ...(crypto ? { wallets: 'provisioning' } : {}) }}
           />
           <P>
             Save the returned <C>id</C> against your user — you’ll use it for every payment they make.
@@ -523,7 +515,7 @@ function Authentication() {
       <Table
         head={['Key', 'Starts with', 'Can do', 'Where it lives']}
         rows={[
-          [<strong key="s" className="text-ink font-medium">Secret</strong>, <C key="p">sk_test_ / sk_live_</C>, 'Everything — including moving money', 'Your server only'],
+          [<strong key="s" className="text-ink font-medium">Secret</strong>, <C key="p">sk_test_ / sk_live_</C>, 'Everything — creating customers, payment intents, and webhooks', 'Your server only'],
           [<strong key="s" className="text-ink font-medium">Publishable</strong>, <C key="p">pk_test_ / pk_live_</C>, 'Read-only (GET requests)', 'Safe in a website or app'],
         ]}
       />
@@ -531,7 +523,7 @@ function Authentication() {
       <H2>Sending the key</H2>
       <CodeBlock code={`curl ${base}/v1/balances \\\n  -H "Authorization: Bearer sk_test_..."`} />
       <P>
-        Use HTTPS for every call. Using a publishable key on a write (like creating a payout) is refused with <C>403 key_class_insufficient</C>.
+        Use HTTPS for every call. Using a publishable key on a write (like creating a deposit intent) is refused with <C>403 key_class_insufficient</C>.
       </P>
 
       <H2>Sandbox vs live</H2>
@@ -581,9 +573,6 @@ function Sandbox() {
       <List>
         <li>Send the exact amount to test a normal payment.</li>
         <li>Send less to test an underpayment, or more to test an overpayment and refund.</li>
-        <li>
-          Send <C>{'{ "business_static_account": true, "amount": "500000" }'}</C> instead to simulate a top-up of your business balance.
-        </li>
       </List>
       <P>This endpoint only exists in sandbox — it’s refused with a live key.</P>
 
@@ -657,7 +646,7 @@ function Amounts() {
         ]}
       />
       <P>
-        Naira has 2 decimal places, so the smallest unit is the kobo — multiply by 100. Strings are used so very large crypto amounts never lose precision.
+        Naira has 2 decimal places, so the smallest unit is the kobo — multiply by 100. Strings are used so {crypto ? 'very large crypto amounts' : 'large amounts'} never lose precision.
       </P>
 
       <H2>Converting safely</H2>
@@ -691,7 +680,7 @@ def to_minor(value: str, decimals: int) -> str:
       )}
 
       <H2>Previewing fees</H2>
-      <P>See exactly what a deposit or withdrawal will cost before it happens. Nothing is charged.</P>
+      <P>See exactly what a deposit{crypto ? ' or withdrawal' : ''} will cost before it happens. Nothing is charged.</P>
       <Request
         method="GET"
         path="/fees/preview?operation=deposit&amount=250000"
@@ -719,8 +708,8 @@ function Requests() {
       </P>
       <CodeBlock code={`Idempotency-Key: 6f1c9e2a-3b4d-4c8e-9a1f-2d7b5e0c4a11`} />
       <Callout tone="warn" title="Not enforced yet">
-        Fluxel accepts the header today but doesn’t yet use it to block duplicates. Until it does, if a money-moving request times out, check{' '}
-        <C>GET /transactions</C> before you retry so you don’t pay twice. Sending the header now means you’re protected the day it switches on.
+        Fluxel accepts the header today but doesn’t yet use it to block duplicates. Until it does, if a write request times out, check the resource state before
+        you retry. Sending the header now means you’re protected the day it switches on.
       </Callout>
 
       <H2>Pagination</H2>
@@ -761,7 +750,7 @@ function Requests() {
         }}
       />
       <P>
-        Paginated lists: <C>/transactions</C>, <C>/deposits</C>, <C>/transfers</C>, <C>/refunds</C> and <C>/payment-links</C>.
+        Paginated lists: <C>/transactions</C> and <C>/deposits</C>.
       </P>
 
       <H2>Tracing a request</H2>
@@ -786,18 +775,19 @@ function Requests() {
 }
 
 function Errors() {
+  const { crypto } = useDocs();
   const codes: [string, string, string][] = [
     ['validation_failed', '400 / 422', 'A field is missing or invalid. The message says which.'],
     ['unauthorized', '401', 'No key, or a malformed Authorization header.'],
     ['key_invalid', '401', 'The key doesn’t exist.'],
     ['key_revoked', '401', 'The key was revoked or rolled.'],
-    ['insufficient_balance', '402', 'Not enough available balance for this payout, withdrawal or transfer.'],
+    ...(crypto ? [['insufficient_balance', '402', 'Not enough available balance for this withdrawal.'] as [string, string, string]] : []),
     ['key_class_insufficient', '403', 'A publishable key was used for a write.'],
     ['business_frozen', '403', 'Your business is frozen — contact support.'],
     ['customer_frozen', '403', 'This customer is frozen. Unfreeze them first.'],
     ['not_found', '404', 'No such object, or it belongs to another business.'],
     ['idempotency_conflict', '409', 'You reused an Idempotency-Key with a different body.'],
-    ['destination_invalid', '422', 'The bank account or wallet address can’t be used.'],
+    ...(crypto ? [['destination_invalid', '422', 'The wallet address can’t be used.'] as [string, string, string]] : []),
     ['amount_below_minimum', '422', 'The amount is under the minimum for this asset.'],
     ['amount_above_maximum', '422', 'The amount is over your limit.'],
     ['asset_disabled', '422', 'This asset is switched off right now.'],
@@ -810,7 +800,7 @@ function Errors() {
       <Lead>
         When something goes wrong, Fluxel answers with a normal HTTP status code and a JSON body that tells you what happened in plain words.
       </Lead>
-      <Json label="Error body" value={{ error: { code: 'insufficient_balance', message: 'available balance is lower than the requested amount' } }} />
+      <Json label="Error body" value={{ error: { code: 'amount_below_minimum', message: 'amount is below the minimum for this asset' } }} />
       <P>
         Match on <C>code</C> in your code — it never changes. The <C>message</C> is for humans and its wording may improve over time.
       </P>
@@ -828,9 +818,9 @@ function Errors() {
       <H2>Every error code</H2>
       <Table head={['Code', 'Status', 'What to do']} rows={codes.map(([c, s, d]) => [<C key="c">{c}</C>, s, d])} />
 
-      <Callout tone="info" title="Created doesn’t always mean done">
-        A payout that’s held for review is still created — you get <C>201</C> with a status that tells you it’s waiting. Always check the <C>status</C> field,
-        not just the HTTP code.
+      <Callout tone="info" title="Created doesn’t always mean ready">
+        A newly created deposit intent returns <C>201</C> with <C>status: &quot;pending&quot;</C> while the virtual account is being provisioned. Always check the{' '}
+        <C>status</C> field, not just the HTTP code.
       </Callout>
     </>
   );
@@ -922,55 +912,6 @@ function Naira() {
         <C>resolution</C> of <C>credited</C>, <C>refunded</C> or <C>written_off</C> once it’s sorted. Overpayment refunds report progress with{' '}
         <C>fiat.refund.initiated</C> then <C>fiat.refund.completed</C> or <C>fiat.refund.failed</C>.
       </P>
-
-      <H2>Topping up your own business balance</H2>
-      <P>
-        To fund payouts, your business has a permanent account number at <C>GET /business/static-account</C>. If you’d rather have a one-off account for a
-        set amount, use <C>POST /business/topup-intents</C>. Either way you’ll get <C>fiat.business_topup.settled</C> when it lands.
-      </P>
-    </>
-  );
-}
-
-function PaymentLinks() {
-  return (
-    <>
-      <Lead>
-        A payment link is a deposit intent with a title and description attached — handy when you want to bill a customer without building your own payment
-        screen. Payment links are Naira only.
-      </Lead>
-      <Request
-        method="POST"
-        path="/payment-links"
-        body={{ customer_id: 'cus_01JC4Z8X2M7Q', amount: '1500000', title: 'Invoice #1042', description: 'Website design — October', redirect_url: 'https://yourapp.com/thanks' }}
-        response={{
-          id: 'pl_01JC52QK7W3N',
-          customer_id: 'cus_01JC4Z8X2M7Q',
-          deposit_intent_id: 'fdi_01JC52QK9P1D',
-          amount: '1500000',
-          asset_code: 'NGN',
-          title: 'Invoice #1042',
-          description: 'Website design — October',
-          redirect_url: 'https://yourapp.com/thanks',
-          voided: false,
-          status: 'pending',
-        }}
-      />
-      <P>
-        The link’s <C>status</C> is always the status of its deposit intent, so everything in the <To id="naira">Naira payments guide</To> applies —
-        including the 30-minute window and the same webhooks.
-      </P>
-      <P>
-        To share a hosted checkout page with the customer, open <strong className="text-ink font-medium">Payment links</strong> in the dashboard and copy the
-        link from there.
-      </P>
-
-      <H2>Voiding a link</H2>
-      <Request method="POST" path="/payment-links/pl_01JC52QK7W3N/void" />
-      <Callout tone="warn" title="Voiding is for your records">
-        A voided link is marked as voided, but the bank account behind it isn’t closed early. Someone who already has the account details could still pay
-        until it expires.
-      </Callout>
     </>
   );
 }
@@ -1041,74 +982,6 @@ function Crypto() {
   );
 }
 
-function Payouts() {
-  return (
-    <>
-      <Lead>Send Naira to any Nigerian bank account — from a customer’s balance, or from your business balance.</Lead>
-      <Flow steps={['Pick the bank', 'Check the name', 'Create payout', 'Payout completed']} />
-
-      <Steps>
-        <Step title="Get the bank code">
-          <Request method="GET" path="/banks" response={[{ code: '058', name: 'Guaranty Trust Bank' }, { code: '044', name: 'Access Bank' }]} />
-          <P>The list rarely changes — cache it for a day.</P>
-        </Step>
-
-        <Step title="Confirm the account name">
-          <P>Always show the account holder’s name and let your user confirm it before sending money. It stops payouts going to the wrong person.</P>
-          <Request method="POST" path="/bank-accounts/resolve" body={{ bank_code: '058', account_number: '0123456789' }} response={{ account_name: 'ADA LOVELACE' }} />
-        </Step>
-
-        <Step title="Create the payout">
-          <P>
-            Include <C>customer_id</C> to pay from that customer’s balance. Leave it out to pay from your business balance.
-          </P>
-          <Request
-            method="POST"
-            path="/payouts"
-            body={{ customer_id: 'cus_01JC4Z8X2M7Q', amount: '150000', bank_code: '058', account_number: '0123456789', account_name: 'ADA LOVELACE' }}
-            response={{
-              id: 'pay_01JC57DMB4XE',
-              status: 'requested',
-              amount: '150000',
-              fee: '5000',
-              destination: { bank_code: '058', account_number: '0123456789', account_name: 'ADA LOVELACE' },
-            }}
-          />
-        </Step>
-
-        <Step title="Wait for the result">
-          <P>
-            Bank transfers can take a little while. Listen for <C>fiat.payout.completed</C> or <C>fiat.payout.failed</C>, or check{' '}
-            <C>GET /payouts/{'{id}'}</C>.
-          </P>
-        </Step>
-      </Steps>
-
-      <H2>Payout statuses</H2>
-      <Table
-        head={['Status', 'Meaning']}
-        rows={[
-          [<C key="s">requested</C>, 'Created and queued.'],
-          [<C key="s">held</C>, 'Paused for a risk review. You’ll hear back by webhook.'],
-          [<C key="s">approved</C>, 'Cleared review, about to be sent.'],
-          [<C key="s">executing</C>, 'Sent to the bank.'],
-          [<C key="s">completed</C>, 'The money arrived. Final.'],
-          [<C key="s">failed</C>, 'The bank rejected it. The money is back in the balance.'],
-          [<C key="s">rejected</C>, 'Declined at review. Nothing was sent.'],
-          [<C key="s">uncertain</C>, 'The bank hasn’t confirmed either way yet. Fluxel keeps checking — don’t retry.'],
-          [<C key="s">reversed</C>, 'Completed, then returned by the bank.'],
-        ]}
-      />
-
-      <H2>Saved payout accounts</H2>
-      <P>
-        Paying the same accounts often? Save them with <C>POST /payout-accounts</C> (Fluxel checks the name for you), list them with{' '}
-        <C>GET /payout-accounts</C>, and remove them with <C>DELETE /payout-accounts/{'{id}'}</C>.
-      </P>
-    </>
-  );
-}
-
 function Withdrawals() {
   return (
     <>
@@ -1156,39 +1029,13 @@ function Withdrawals() {
   );
 }
 
-function Transfers() {
-  return (
-    <>
-      <Lead>
-        Move money from one of your customers to another — instantly, with no bank or blockchain involved. Perfect for marketplaces, where a buyer pays a
-        seller.
-      </Lead>
-      <Request
-        method="POST"
-        path="/transfers"
-        body={{ from_customer_id: 'cus_01JC4Z8X2M7Q', to_customer_id: 'cus_01JC4Z9F3RHA', asset_code: 'NGN', amount: '50000', fee: { business_fee: '1000' } }}
-        response={{ id: 'trf_01JC5C1VY0QK', status: 'completed', amount: '50000', business_fee: '1000', fluxel_fee: '0' }}
-      />
-      <List>
-        <li>Transfers complete straight away — the response already says <C>completed</C>.</li>
-        <li>
-          <C>fee.business_fee</C> is optional: your own cut, moved to your business balance. <C>fluxel_fee</C> is what Fluxel charges.
-        </li>
-        <li>
-          You’ll also get a <C>ledger.transfer.completed</C> webhook. List past transfers with <C>GET /transfers?customer_id=…</C>.
-        </li>
-      </List>
-    </>
-  );
-}
-
 function Webhooks() {
   const { base } = useDocs();
   return (
     <>
       <Lead>
-        Webhooks are how Fluxel tells your server that something happened — money arrived, a payout finished — the moment it happens. They’re the most reliable
-        way to keep your app in sync.
+        Webhooks are how Fluxel tells your server that something happened — a virtual account is ready, or a payment settled — the moment it happens. They’re the
+        most reliable way to keep your app in sync.
       </Lead>
 
       <H2>1. Add an endpoint</H2>
@@ -1199,7 +1046,7 @@ function Webhooks() {
       <Request
         method="POST"
         path="/webhook-endpoints"
-        body={{ url: 'https://yourapp.com/webhooks/fluxel', events: ['fiat.deposit.settled', 'fiat.payout.completed', 'fiat.payout.failed'] }}
+        body={{ url: 'https://yourapp.com/webhooks/fluxel', events: ['fiat.deposit.settled', 'fiat.deposit_intent.underpaid', 'fiat.deposit_intent.expired'] }}
         response={{ id: 'whe_01JC5DX7N2ZC', secret: 'q9n2Yk1bW4f0bW2gk3Q2m3w8cH0p2Jt7XjLr6l5yS9o=' }}
       />
       <Callout tone="warn" title="Save the secret now">
@@ -1322,7 +1169,7 @@ def fluxel_webhook():
         </li>
         <li>
           <strong className="text-ink font-medium">Don’t rely on order.</strong> Events can arrive out of order. Treat each as a fact about one object, and
-          when in doubt fetch the latest state (e.g. <C>GET /payouts/{'{id}'}</C>).
+          when in doubt fetch the latest state (e.g. <C>GET /fiat-deposit-intents/{'{id}'}</C>).
         </li>
         <li>
           <strong className="text-ink font-medium">Check </strong>
@@ -1354,6 +1201,7 @@ interface EventDoc {
   type: string;
   when: string;
   data: string[];
+  crypto?: boolean;
 }
 
 const DELIVERED_EVENTS: { group: string; events: EventDoc[] }[] = [
@@ -1369,26 +1217,12 @@ const DELIVERED_EVENTS: { group: string; events: EventDoc[] }[] = [
       { type: 'fiat.refund.initiated', when: 'Fluxel started refunding an overpayment.', data: ['refund_id', 'intent_id', 'amount'] },
       { type: 'fiat.refund.completed', when: 'The refund reached the payer.', data: ['refund_id', 'provider_ref'] },
       { type: 'fiat.refund.failed', when: 'The refund didn’t go through.', data: ['refund_id', 'reason'] },
-      { type: 'fiat.business_topup.settled', when: 'Money landed in your business balance.', data: ['topup_id', 'amount', 'fee', 'provider_ref'] },
     ],
   },
   {
-    group: 'Payouts',
+    group: 'Customers',
     events: [
-      { type: 'fiat.payout.processing', when: 'The payout was sent to the bank.', data: ['payout_id', 'amount', 'fee', 'destination_bank_code', 'destination_account_number', 'destination_account_name'] },
-      { type: 'fiat.payout.pending_review', when: 'The payout is held for a risk review.', data: ['payout_id', 'rule_ids'] },
-      { type: 'fiat.payout.completed', when: 'The money arrived in the bank account.', data: ['payout_id', 'provider_ref'] },
-      { type: 'fiat.payout.failed', when: 'The bank rejected the payout. The balance was restored.', data: ['payout_id', 'reason'] },
-      { type: 'fiat.payout.rejected', when: 'The payout was declined at review.', data: ['payout_id', 'reason'] },
-    ],
-  },
-  {
-    group: 'Customers & transfers',
-    events: [
-      { type: 'customer.wallets.ready', when: 'A new customer’s crypto addresses are ready.', data: ['customer_id', 'addresses[{chain, address}]'] },
-      { type: 'ledger.transfer.completed', when: 'A transfer between two customers finished.', data: ['transfer_id', 'from_customer_id', 'to_customer_id', 'asset_code', 'amount', 'business_fee', 'fluxel_fee'] },
-      { type: 'ledger.transfer.pending_review', when: 'A transfer is held for review.', data: ['transfer_id', 'rule_ids'] },
-      { type: 'ledger.transfer.rejected', when: 'A transfer was declined.', data: ['transfer_id', 'reason'] },
+      { type: 'customer.wallets.ready', when: 'A new customer’s crypto addresses are ready.', data: ['customer_id', 'addresses[{chain, address}]'], crypto: true },
     ],
   },
   {
@@ -1397,26 +1231,8 @@ const DELIVERED_EVENTS: { group: string; events: EventDoc[] }[] = [
   },
 ];
 
-const NOT_YET_DELIVERED = [
-  'crypto.deposit.detected',
-  'crypto.deposit.confirmed',
-  'crypto.deposit.orphaned',
-  'crypto.deposit_intent.fulfilled',
-  'crypto.deposit_intent.underpaid',
-  'crypto.withdrawal.broadcast',
-  'crypto.withdrawal.confirmed',
-  'crypto.withdrawal.failed',
-  'customer.created',
-  'customer.frozen',
-  'customer.unfrozen',
-  'business.kyb.approved',
-  'business.kyb.rejected',
-  'business.settlement_preference.updated',
-];
-
 function Events() {
   const { crypto } = useDocs();
-  const pending = crypto ? NOT_YET_DELIVERED : NOT_YET_DELIVERED.filter((e) => !e.startsWith('crypto.'));
   return (
     <>
       <Lead>
@@ -1424,41 +1240,32 @@ function Events() {
         <C>area.object.what_happened</C>.
       </Lead>
 
-      {DELIVERED_EVENTS.map((g) => (
-        <section key={g.group}>
-          <H2>{g.group}</H2>
-          <div className="rounded-xl border border-line divide-y divide-line overflow-hidden">
-            {g.events.map((e) => (
-              <div key={e.type} className="px-4 py-3.5">
-                <code className="font-mono text-[13px] font-medium text-ink">{e.type}</code>
-                <p className="mt-1 text-[13.5px] leading-6 text-ink-2">{e.when}</p>
-                {e.data.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {e.data.map((d) => (
-                      <span key={d} className="h-6 px-2 inline-flex items-center rounded-md bg-subtle border border-line font-mono text-[11px] text-ink-3">
-                        {d}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
-
-      <H2>Not delivered yet</H2>
-      <P>
-        These events exist inside Fluxel, and you can tick them when adding an endpoint, but they aren’t sent to webhook endpoints yet. Use the API to check
-        on these objects for now.
-      </P>
-      <div className="flex flex-wrap gap-1.5">
-        {pending.map((e) => (
-          <span key={e} className="h-6 px-2 inline-flex items-center rounded-md border border-dashed border-line-strong font-mono text-[11px] text-ink-3">
-            {e}
-          </span>
-        ))}
-      </div>
+      {DELIVERED_EVENTS.map((g) => {
+        const events = g.events.filter((e) => crypto || !e.crypto);
+        if (events.length === 0) return null;
+        return (
+          <section key={g.group}>
+            <H2>{g.group}</H2>
+            <div className="rounded-xl border border-line divide-y divide-line overflow-hidden">
+              {events.map((e) => (
+                <div key={e.type} className="px-4 py-3.5">
+                  <code className="font-mono text-[13px] font-medium text-ink">{e.type}</code>
+                  <p className="mt-1 text-[13.5px] leading-6 text-ink-2">{e.when}</p>
+                  {e.data.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {e.data.map((d) => (
+                        <span key={d} className="h-6 px-2 inline-flex items-center rounded-md bg-subtle border border-line font-mono text-[11px] text-ink-3">
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </>
   );
 }
@@ -1492,10 +1299,6 @@ const REFERENCE: { group: string; endpoints: Endpoint[] }[] = [
       { m: 'POST', path: '/customers/{id}/fiat-deposit-intents', desc: 'Create a deposit intent' },
       { m: 'GET', path: '/fiat-deposit-intents/{id}', desc: 'Get a deposit intent' },
       { m: 'GET', path: '/fiat-deposit-intents/{id}/events', desc: 'Live status stream (Server-Sent Events)' },
-      { m: 'POST', path: '/payment-links', desc: 'Create a payment link' },
-      { m: 'GET', path: '/payment-links', desc: 'List payment links' },
-      { m: 'GET', path: '/payment-links/{id}', desc: 'Get a payment link' },
-      { m: 'POST', path: '/payment-links/{id}/void', desc: 'Void a payment link' },
     ],
   },
   {
@@ -1507,59 +1310,20 @@ const REFERENCE: { group: string; endpoints: Endpoint[] }[] = [
     ],
   },
   {
-    group: 'Payouts & withdrawals',
+    group: 'Crypto withdrawals',
     endpoints: [
-      { m: 'GET', path: '/banks', desc: 'List banks and their codes' },
-      { m: 'POST', path: '/bank-accounts/resolve', desc: 'Look up an account name' },
-      { m: 'POST', path: '/payouts', desc: 'Send Naira to a bank account' },
-      { m: 'GET', path: '/payouts/{id}', desc: 'Get a payout' },
-      { m: 'POST', path: '/payout-accounts', desc: 'Save a payout account' },
-      { m: 'GET', path: '/payout-accounts', desc: 'List saved payout accounts' },
-      { m: 'DELETE', path: '/payout-accounts/{id}', desc: 'Remove a saved payout account' },
       { m: 'POST', path: '/crypto-withdrawals', desc: 'Send crypto to a wallet', crypto: true },
       { m: 'GET', path: '/crypto-withdrawals/{id}', desc: 'Get a crypto withdrawal', crypto: true },
     ],
   },
   {
-    group: 'Transfers',
-    endpoints: [
-      { m: 'POST', path: '/transfers', desc: 'Move money between two customers' },
-      { m: 'GET', path: '/transfers', desc: 'List transfers' },
-      { m: 'GET', path: '/transfers/{id}', desc: 'Get a transfer' },
-    ],
-  },
-  {
     group: 'Balances & history',
     endpoints: [
-      { m: 'GET', path: '/balances', desc: 'Your business balance per asset' },
-      { m: 'GET', path: '/transactions', desc: 'Every deposit, payout, transfer and withdrawal' },
+      { m: 'GET', path: '/balances', desc: 'Your business balance' },
+      { m: 'GET', path: '/transactions', desc: 'List transactions' },
       { m: 'GET', path: '/deposits', desc: 'List deposits' },
-      { m: 'GET', path: '/refunds', desc: 'List refunds' },
-      { m: 'GET', path: '/refunds/{id}', desc: 'Get a refund' },
-      { m: 'GET', path: '/reports/settlement-summary', desc: 'Totals for a date range (from, to)' },
       { m: 'GET', path: '/fees/preview', desc: 'Preview a fee (operation, amount)' },
-      { m: 'GET', path: '/assets', desc: 'Supported assets and decimals' },
-    ],
-  },
-  {
-    group: 'Your business',
-    endpoints: [
-      { m: 'GET', path: '/business/static-account', desc: 'Your permanent top-up account' },
-      { m: 'POST', path: '/business/topup-intents', desc: 'One-off top-up account for an amount' },
-      { m: 'GET', path: '/business/topup-intents/{id}', desc: 'Get a top-up intent' },
-      { m: 'GET', path: '/business/kyb-tier', desc: 'Your verification tier' },
-      { m: 'GET', path: '/business/settlement-preference', desc: 'How your balance is settled' },
-      { m: 'PUT', path: '/business/settlement-preference', desc: 'Change it — accumulate or auto_transfer' },
-      { m: 'GET', path: '/checkout-config', desc: 'Hosted checkout branding' },
-      { m: 'PUT', path: '/checkout-config', desc: 'Update checkout branding' },
-    ],
-  },
-  {
-    group: 'Disputes',
-    endpoints: [
-      { m: 'POST', path: '/disputes', desc: 'Open a dispute — body: { transaction_id, reason }' },
-      { m: 'GET', path: '/disputes', desc: 'List disputes' },
-      { m: 'GET', path: '/disputes/{id}', desc: 'Get a dispute' },
+      { m: 'GET', path: '/assets', desc: 'Supported assets and decimals', crypto: true },
     ],
   },
   {
@@ -1606,7 +1370,7 @@ function Reference() {
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Filter endpoints — e.g. payout"
+        placeholder="Filter endpoints — e.g. deposit"
         aria-label="Filter endpoints"
         className={cx(selectClass, 'mt-5 cursor-text')}
       />
@@ -1638,11 +1402,8 @@ const PAGES: Record<SectionId, () => React.ReactElement> = {
   requests: Requests,
   errors: Errors,
   naira: Naira,
-  'payment-links': PaymentLinks,
   crypto: Crypto,
-  payouts: Payouts,
   withdrawals: Withdrawals,
-  transfers: Transfers,
   webhooks: Webhooks,
   events: Events,
   reference: Reference,

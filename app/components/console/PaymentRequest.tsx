@@ -7,7 +7,8 @@ import { checkoutUrl } from '../../lib/console/checkoutLink';
 import type { CheckoutContext } from '../../lib/checkoutContext';
 import { dash, v1 } from '../../lib/console/client';
 import { formatRelative } from '../../lib/console/format';
-import { decimalsFor, toMinor } from '../../lib/console/money';
+import { useFeePreview } from '../../lib/console/data';
+import { decimalsFor, formatMinor, toMinor } from '../../lib/console/money';
 import { useCryptoEnabled } from '../../lib/features';
 import type { Asset } from '../../lib/console/models';
 import CurrencyIcon from './CurrencyIcon';
@@ -79,13 +80,22 @@ export function AmountField({
   onChange: (v: string) => void;
   assets?: Asset[];
 }) {
-  const decimals = decimalsFor(PAY_CURRENCIES[currency].asset, assets);
-  const invalid = value !== '' && !toMinor(value, decimals);
+  const asset = PAY_CURRENCIES[currency].asset;
+  const decimals = decimalsFor(asset, assets);
+  const minor = value === '' ? null : toMinor(value, decimals);
+  const invalid = value !== '' && !minor;
+  const fee = useFeePreview('deposit', minor);
   return (
     <Field
       label="Amount"
       htmlFor={id}
       error={invalid ? `Enter a positive amount with at most ${decimals} decimal places.` : undefined}
+      hint={
+        fee.data &&
+        (fee.data.fee === '0'
+          ? 'No fee — you receive the full amount.'
+          : `Fee ${formatMinor(fee.data.fee, asset, assets)} · you receive ${formatMinor(fee.data.net_amount, asset, assets)}`)
+      }
     >
       <div className="relative">
         {currency === 'NGN' && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3">₦</span>}
