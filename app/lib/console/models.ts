@@ -86,6 +86,18 @@ export interface DepositIntent {
   va?: { account_number?: string; account_name?: string; bank_name?: string } | null;
 }
 
+/**
+ * `GET /v1/fees/preview`. `net_amount` flips direction on purpose: for a
+ * deposit it's what's credited (`amount − fee`), for a withdrawal it's what
+ * leaves the balance (`amount + fee`).
+ */
+export interface FeePreview {
+  operation: 'deposit' | 'withdrawal';
+  amount: string;
+  fee: string;
+  net_amount: string;
+}
+
 export interface PayoutAccount {
   id: string;
   account_name: string;

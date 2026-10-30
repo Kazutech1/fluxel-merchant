@@ -5,7 +5,7 @@ import { ArrowRight, ArrowUpRight, BadgeCheck, Link2, UserPlus } from 'lucide-re
 
 import {
   useAssets,
-  useCustomerBalancesTotal,
+  useBalances,
   useCustomers,
   useDisputes,
   useSettlementSummary,
@@ -78,12 +78,12 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
   const disputes = useDisputes();
   const summary = useSettlementSummary(from, to);
   const staticAccount = useStaticAccount();
-  // Dashboard balances = total held across all customers, per asset.
-  const balances = useCustomerBalancesTotal();
+
+  const balances = useBalances();
 
   const ngnDecimals = decimalsFor('NGN', assets.data);
   const ngn = balances.data?.find((b) => b.asset_code === 'NGN');
-  const crypto = (balances.data ?? []).filter((b) => b.asset_code !== 'NGN' && b.total !== '0');
+  const crypto = nonZeroCrypto(balances.data);
   const openDisputes = (disputes.data ?? []).filter((d) => d.status === 'open' || d.status === 'under_review');
 
   const daily = useMemo(() => {
@@ -175,7 +175,7 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
             <p className="relative mt-4 text-sm text-slate-400">{balances.error.message}</p>
           ) : (
             <Money
-              minor={ngn?.total ?? '0'}
+              minor={ngn?.available ?? '0'}
               asset="NGN"
               assets={assets.data}
               className="relative mt-3 block text-[2rem] sm:text-[2.5rem] leading-none font-semibold text-white"
@@ -220,7 +220,7 @@ export default function OverviewPage({ role, business, onNavigate, onOpenTxn, on
                     <li key={b.asset_code} className="flex items-center gap-3 px-5 py-3">
                       <CurrencyIcon asset={b.asset_code} className="size-8" />
                       <span className="flex-1 text-sm text-ink">{b.asset_code}</span>
-                      <Money minor={b.total} asset={b.asset_code} assets={assets.data} className="text-sm font-medium text-ink" />
+                      <Money minor={b.available} asset={b.asset_code} assets={assets.data} className="text-sm font-medium text-ink" />
                     </li>
                   ))}
                 </ul>

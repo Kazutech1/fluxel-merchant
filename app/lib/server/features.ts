@@ -3,9 +3,8 @@
  *
  * `GET /v1/platform/features` → `{ crypto_disabled: boolean }`. Public (no
  * key), because the sign-in page and the hosted checkout need it too.
- * **Not built on the API yet** — see docs/dashboard-v1-access.md. Crypto is on
- * by default: only an explicit `crypto_disabled: true` hides it, so a missing
- * or failing endpoint leaves crypto visible.
+ * Crypto is on by default: only an explicit `crypto_disabled: true` hides it,
+ * so a missing or failing endpoint leaves crypto visible.
  */
 
 import { apiRequest } from './fluxelApi';

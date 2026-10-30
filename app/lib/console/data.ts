@@ -5,6 +5,8 @@
  * `invalidate('customers')` refreshes everything keyed under customers.
  */
 
+import { useEffect, useState } from 'react';
+
 import { ConsoleError, dash, useResource, v1 } from './client';
 import { cryptoDisabled, isFiatAsset } from '../features';
 import type {
@@ -18,6 +20,7 @@ import type {
   DashboardKey,
   DashboardSession,
   Dispute,
+  FeePreview,
   Page,
   PaymentLink,
   PayoutAccount,
@@ -69,68 +72,27 @@ export const useCustomerBalances = (id: string | null) =>
     fiatOnly(await v1.get<Balance[]>(`customers/${id}/balances`), (b) => b.asset_code)
   );
 
-/** Per-asset sum of every customer's ledger balance, minor units as decimal strings. */
-export interface CustomerBalanceTotal {
-  asset_code: string;
-  available: string;
-  pending: string;
-  total: string;
-  /** Customers holding a non-zero total in this asset. */
-  holders: number;
-}
-
-const BALANCE_FANOUT = 8;
-
-/**
- * Total held for customers, per asset. The API only exposes balances per
- * customer (`GET /v1/customers/{id}/balances`), so this fans out across the
- * customer list a few at a time and sums. Keyed under `customers` so
- * `invalidate('customers')` refreshes it too.
- */
-export const useCustomerBalancesTotal = () =>
-  useResource(`customers:balances-total`, async (): Promise<CustomerBalanceTotal[]> => {
-    const customers = await v1.get<Customer[]>('customers');
-    type Row = { asset_code: string; available?: string; pending?: string; total?: string };
-    const sums = new Map<string, { available: bigint; pending: bigint; holders: number }>();
-    const big = (s?: string) => {
-      try {
-        return BigInt(s ?? '0');
-      } catch {
-        return BigInt(0);
-      }
-    };
-
-    for (let i = 0; i < customers.length; i += BALANCE_FANOUT) {
-      const batch = customers.slice(i, i + BALANCE_FANOUT);
-      const results = await Promise.all(batch.map((c) => v1.get<Row[]>(`customers/${c.id}/balances`)));
-      for (const rows of results) {
-        for (const r of rows ?? []) {
-          const available = big(r.available);
-          const pending = big(r.pending);
-          const entry = sums.get(r.asset_code) ?? { available: BigInt(0), pending: BigInt(0), holders: 0 };
-          entry.available += available;
-          entry.pending += pending;
-          if (available + pending !== BigInt(0)) entry.holders++;
-          sums.set(r.asset_code, entry);
-        }
-      }
-    }
-
-    const totals = [...sums.entries()]
-      .map(([asset_code, s]) => ({
-        asset_code,
-        available: s.available.toString(),
-        pending: s.pending.toString(),
-        total: (s.available + s.pending).toString(),
-        holders: s.holders,
-      }))
-      .sort((a, b) => (a.asset_code === 'NGN' ? -1 : b.asset_code === 'NGN' ? 1 : a.asset_code.localeCompare(b.asset_code)));
-    return fiatOnly(totals, (t) => t.asset_code);
-  });
-
 export const usePaymentLinks = () =>
   useResource(`links`, async () => (await v1.get<Page<PaymentLink>>('payment-links', { limit: LIMIT })).data);
 export const usePayoutAccounts = () => useResource(`payout-accounts`, () => v1.get<PayoutAccount[]>('payout-accounts'));
+
+/**
+ * The fee the business's own pricing puts on `minor` right now. Waits for
+ * typing to settle before asking, so each keystroke isn't a request.
+ */
+export function useFeePreview(operation: FeePreview['operation'], minor: string | null) {
+  const [settled, setSettled] = useState(minor);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSettled(minor), 350);
+    return () => window.clearTimeout(t);
+  }, [minor]);
+  const current = settled === minor ? settled : null;
+  return useResource(current ? `fees:${operation}:${current}` : null, () => fetchFeePreview(operation, current!));
+}
+
+export const fetchFeePreview = (operation: FeePreview['operation'], minor: string) =>
+  v1.get<FeePreview>('fees/preview', { operation, amount: minor });
+
 export const useRefunds = () =>
   useResource(`refunds`, async () => (await v1.get<Page<Refund>>('refunds', { limit: LIMIT })).data);
 export const useDisputes = (enabled = true) => useResource(enabled ? 'disputes' : null, () => v1.get<Dispute[]>('disputes'));
