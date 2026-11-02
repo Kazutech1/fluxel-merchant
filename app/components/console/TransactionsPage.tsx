@@ -6,11 +6,11 @@ import { Download, Search } from 'lucide-react';
 import { useCryptoEnabled } from '../../lib/features';
 import { useAssets, useCustomers, useTransactions } from '../../lib/console/data';
 import { formatDateTime, formatWhen, titleCase } from '../../lib/console/format';
-import { decimalsFor, toMajor } from '../../lib/console/money';
+import { decimalsFor, formatMinor, isZeroMinor, toMajor } from '../../lib/console/money';
 import type { Txn } from '../../lib/console/models';
 import { DIRECTION_LABEL, downloadCsv, type PageProps } from './nav';
 import { Button, Card, EmptyState, ErrorState, LoadingRows, Money, PageHeader, Segmented, StatusBadge, controlClass, cx } from './ui';
-import { DirectionIcon, txnMethod, txnTitle } from './txn';
+import { DirectionIcon, feeReturned, txnMethod, txnTitle } from './txn';
 
 const PAGE_SIZE = 25;
 type Direction = 'all' | Txn['direction'];
@@ -144,6 +144,7 @@ export default function TransactionsPage({ onOpenTxn }: PageProps) {
                   <th className="font-medium px-5 py-3">Method</th>
                   <th className="font-medium px-5 py-3">Date</th>
                   <th className="font-medium px-5 py-3">Status</th>
+                  <th className="font-medium px-5 py-3 text-right">Fee</th>
                   <th className="font-medium px-5 py-3 text-right">Amount</th>
                 </tr>
               </thead>
@@ -174,6 +175,18 @@ export default function TransactionsPage({ onOpenTxn }: PageProps) {
                       <StatusBadge status={t.status} />
                     </td>
                     <td className="px-5 py-3 text-right whitespace-nowrap">
+                      {isZeroMinor(t.fee) ? (
+                        <span className="text-ink-3">—</span>
+                      ) : (
+                        <Money
+                          minor={t.fee}
+                          asset={t.asset_code}
+                          assets={assets}
+                          className={t.status === 'failed' || feeReturned(t) ? 'text-ink-3 line-through' : 'text-ink-2'}
+                        />
+                      )}
+                    </td>
+                    <td className="px-5 py-3 text-right whitespace-nowrap">
                       <Money
                         minor={t.amount}
                         asset={t.asset_code}
@@ -195,7 +208,10 @@ export default function TransactionsPage({ onOpenTxn }: PageProps) {
                     <DirectionIcon direction={t.direction} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-ink truncate">{txnTitle(t, customers)}</span>
-                      <span className="block text-xs text-ink-3">{formatWhen(t.created_at)}</span>
+                      <span className="block text-xs text-ink-3">
+                        {formatWhen(t.created_at)}
+                        {!isZeroMinor(t.fee) && !feeReturned(t) && <> · Fee {formatMinor(t.fee, t.asset_code, assets)}</>}
+                      </span>
                     </span>
                     <span className="text-right shrink-0">
                       <Money

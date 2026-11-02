@@ -40,6 +40,26 @@ The console can hide everything about crypto, but the switch has to come from th
 
 The console only hides things. To block crypto fully, the API should also refuse crypto deposit intents, crypto withdrawals and crypto webhook subscriptions while the switch is on, because API keys can still call those routes directly.
 
+## Fees: what the console shows, and what it can't
+
+_Added 2 Nov 2026._ Read from `dev_msg/2026-10-13-fee-management.md`, `2026-10-21-fee-wiring-and-preview.md` and `2026-10-27-fees-preview-dashboard-jwt.md`.
+
+What the console shows:
+
+- **Before a withdrawal:** `GET /v1/fees/preview?operation=withdrawal` gives the fee, the total that leaves the balance (`net_amount`), and the most that can be withdrawn once the fee is added.
+- **On every transaction:** a Fee column, plus the fee in the detail drawer. For deposits it shows "You received" (amount − fee). For payouts and withdrawals it shows "Total from your balance" (amount + fee). A fiat payout that ended `failed`, `rejected` or `reversed` shows its fee struck through, because the hold is reversed for amount + fee.
+- **Crypto withdrawals** are now listed (`/v1/transactions?kind=withdrawal`). Before this, the console never requested them, so their fees weren't visible.
+- **Permissions:** the console's proxy maps `/fees/preview` to `transactions.read`, the same as `api/src/permissions.rs`. It used `balances.read` before.
+
+What it can't show, because the API doesn't support it:
+
+| Gap | Effect | Ask |
+|---|---|---|
+| No endpoint returns the business's own fee pricing (`deposit_fee` / `withdrawal_fee`). | Merchants can't see their rates (for example "1.5%, capped at ₦2,000"). They only see fees one amount at a time. | `GET /v1/business/fees`, read-only, returning both `FeeConfig`s. |
+| `operation=deposit` preview returns 403 for a dashboard session. | When a merchant creates a payment request, the console can't say what they'll receive. The hint that tried this was failing silently and has been removed. | Allow `deposit` for dashboard sessions, or provide the read endpoint above. |
+| `GET /v1/reports/settlement-summary` has no fee totals. | There's no accurate "fees paid this period". Summing the console's latest-100 rows would undercount. | Add per-asset `fees` totals to the summary. |
+| Failed crypto withdrawals | It isn't clear whether the fee goes back to the balance. The console doesn't say either way. | Confirm, and say so in the row (for example a `fee_charged` field). |
+
 ## Other backend issues found while testing
 
 | Area | What happens | Suggested fix |

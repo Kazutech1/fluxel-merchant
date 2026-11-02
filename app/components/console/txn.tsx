@@ -16,12 +16,21 @@ export function customerLabel(id: string | null | undefined, customers?: Custome
 /** "From amina@…" for deposits, "To GTBank" style is unavailable — the API doesn't return payout destinations in lists. */
 export function txnTitle(t: Txn, customers?: Customer[]): string {
   if (t.direction === 'transfer') return `${customerLabel(t.customer_id, customers)} → ${customerLabel(t.to_customer_id, customers)}`;
+  if (t.kind === 'withdrawal') return `Withdrawal · ${customerLabel(t.customer_id, customers)}`;
   if (t.direction === 'out') return t.customer_id ? `Payout · ${customerLabel(t.customer_id, customers)}` : 'Payout to bank';
   return customerLabel(t.customer_id, customers);
 }
 
+/**
+ * A fiat payout that didn't go through has its hold reversed for amount + fee,
+ * so the fee goes back too. (Crypto withdrawals: not confirmed, so not claimed.)
+ */
+export function feeReturned(t: Txn): boolean {
+  return t.kind === 'fiat' && t.direction === 'out' && ['failed', 'rejected', 'reversed'].includes(t.status);
+}
+
 export function txnMethod(t: Txn): string {
-  if (t.kind === 'crypto') return `${t.asset_code} · on-chain`;
+  if (t.kind === 'crypto' || t.kind === 'withdrawal') return `${t.asset_code} · on-chain`;
   if (t.kind === 'transfer') return `${t.asset_code} · internal`;
   return t.direction === 'out' ? 'Bank payout' : 'Bank transfer';
 }

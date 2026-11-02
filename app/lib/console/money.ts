@@ -40,6 +40,21 @@ export function toMajor(minor: string | number | null | undefined, decimals: num
   return Number.isFinite(n) ? n / 10 ** decimals : 0;
 }
 
+/** Exact `a + b` / `a − b` on minor-unit strings (never below zero). Bad input counts as 0. */
+function big(minor: string | null | undefined): bigint {
+  try {
+    return BigInt(minor || '0');
+  } catch {
+    return BigInt(0);
+  }
+}
+export const addMinor = (a: string | null | undefined, b: string | null | undefined) => (big(a) + big(b)).toString();
+export function subMinor(a: string | null | undefined, b: string | null | undefined): string {
+  const d = big(a) - big(b);
+  return (d < BigInt(0) ? BigInt(0) : d).toString();
+}
+export const isZeroMinor = (minor: string | null | undefined) => big(minor) === BigInt(0);
+
 /**
  * "1,250.5" → "125050" (decimals 2). Returns null for anything that isn't a
  * plain positive amount or has more precision than the asset allows.

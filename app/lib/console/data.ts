@@ -48,17 +48,24 @@ export const useBalances = () =>
 /**
  * Money in, money out and transfers. Fiat rows come back as `kind: "fiat"`
  * whichever way the money moved, so each direction is listed separately and
- * tagged here. The latest 100 of each.
+ * tagged here. Crypto withdrawals are their own kind. The latest 100 of each.
  */
 export const useTransactions = () =>
   useResource(`transactions`, async (): Promise<Txn[]> => {
-    const [deposits, payouts, transfers] = await Promise.all([
+    const crypto = !(await cryptoDisabled());
+    const [deposits, payouts, transfers, withdrawals] = await Promise.all([
       v1.get<Page<ApiTransaction>>('deposits', { limit: LIMIT }),
       v1.get<Page<ApiTransaction>>('transactions', { kind: 'payout', limit: LIMIT }),
       v1.get<Page<ApiTransaction>>('transactions', { kind: 'transfer', limit: LIMIT }),
+      crypto ? v1.get<Page<ApiTransaction>>('transactions', { kind: 'withdrawal', limit: LIMIT }) : { data: [] },
     ]);
     const tag = (rows: ApiTransaction[], direction: Txn['direction']) => rows.map((t) => ({ ...t, direction }));
-    const all = [...tag(deposits.data, 'in'), ...tag(payouts.data, 'out'), ...tag(transfers.data, 'transfer')];
+    const all = [
+      ...tag(deposits.data, 'in'),
+      ...tag(payouts.data, 'out'),
+      ...tag(withdrawals.data, 'out'),
+      ...tag(transfers.data, 'transfer'),
+    ];
     return (await fiatOnly(all, (t) => t.asset_code)).sort(
       (a, b) => Date.parse(b.created_at ?? '0') - Date.parse(a.created_at ?? '0')
     );

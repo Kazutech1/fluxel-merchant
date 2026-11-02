@@ -6,12 +6,12 @@ import { ExternalLink, Flag } from 'lucide-react';
 import { invalidate, v1 } from '../../lib/console/client';
 import { useAssets, useCustomers, useDisputes } from '../../lib/console/data';
 import { formatDateTime, titleCase } from '../../lib/console/format';
-import { CHAIN_LABEL, decimalsFor, toMajor } from '../../lib/console/money';
+import { CHAIN_LABEL, addMinor, isZeroMinor, subMinor } from '../../lib/console/money';
 import type { Dispute, Txn } from '../../lib/console/models';
 import { can } from '../../lib/permissions';
 import { DIRECTION_LABEL, type Notify, type Page } from './nav';
 import { AsyncButton, Button, CopyButton, DetailList, Drawer, Field, Modal, Money, StatusBadge, textareaClass } from './ui';
-import { DirectionIcon, customerLabel, txnMethod, txnTitle } from './txn';
+import { DirectionIcon, customerLabel, feeReturned, txnMethod, txnTitle } from './txn';
 
 const EXPLORER: Record<string, (tx: string) => string> = {
   ethereum: (tx) => `https://etherscan.io/tx/${tx}`,
@@ -53,13 +53,13 @@ export default function TransactionDrawer({
   if (!txn) return null;
 
   const dispute: Dispute | undefined = disputes?.find((d) => d.transaction_id === txn.id);
-  const decimals = decimalsFor(txn.asset_code, assets);
-  const net = toMajor(txn.amount, decimals) - toMajor(txn.fee, decimals);
+  const noFee = isZeroMinor(txn.fee);
+  const returned = feeReturned(txn);
   const explorer = txn.txid && txn.chain ? EXPLORER[txn.chain]?.(txn.txid) : undefined;
 
   const items: { term: string; detail: React.ReactNode }[] = [
     { term: 'Status', detail: <StatusBadge status={txn.status} /> },
-    { term: 'Type', detail: `${DIRECTION_LABEL[txn.direction]} · ${txnMethod(txn)}` },
+    { term: 'Type', detail: `${txn.kind === 'withdrawal' ? 'Withdrawal' : DIRECTION_LABEL[txn.direction]} · ${txnMethod(txn)}` },
     { term: 'Date', detail: formatDateTime(txn.created_at) },
     { term: 'Transaction ID', detail: <Mono value={txn.id} /> },
   ];
@@ -79,9 +79,36 @@ export default function TransactionDrawer({
   }
   if (txn.to_customer_id) items.push({ term: 'To', detail: customerLabel(txn.to_customer_id, customers) });
   items.push({ term: 'Amount', detail: <Money minor={txn.amount} asset={txn.asset_code} assets={assets} /> });
-  items.push({ term: 'Fee', detail: <Money minor={txn.fee} asset={txn.asset_code} assets={assets} /> });
+  items.push({
+    term: 'Fee',
+    detail: noFee ? (
+      'No fee'
+    ) : (
+      <span className="space-y-0.5">
+        <Money minor={txn.fee} asset={txn.asset_code} assets={assets} className={returned ? 'line-through text-ink-3' : undefined} />
+        <span className="block text-xs text-ink-3">
+          {returned
+            ? 'Not charged: the amount and the fee went back to your balance.'
+            : txn.direction === 'in'
+              ? 'Taken out of the deposit.'
+              : txn.direction === 'out'
+                ? 'Charged on top of the amount sent.'
+                : null}
+        </span>
+      </span>
+    ),
+  });
   if (txn.direction === 'in') {
-    items.push({ term: 'You received', detail: <Money value={net} asset={txn.asset_code} className="font-medium" /> });
+    items.push({
+      term: 'You received',
+      detail: <Money minor={subMinor(txn.amount, txn.fee)} asset={txn.asset_code} assets={assets} className="font-medium" />,
+    });
+  }
+  if (txn.direction === 'out' && !noFee && !returned) {
+    items.push({
+      term: 'Total from your balance',
+      detail: <Money minor={addMinor(txn.amount, txn.fee)} asset={txn.asset_code} assets={assets} className="font-medium" />,
+    });
   }
   if (txn.chain) items.push({ term: 'Network', detail: CHAIN_LABEL[txn.chain] ?? titleCase(txn.chain) });
   if (txn.confirmations !== null && txn.confirmations !== undefined) items.push({ term: 'Confirmations', detail: txn.confirmations });
@@ -116,7 +143,7 @@ export default function TransactionDrawer({
 
   return (
     <>
-      <Drawer open onClose={onClose} title={DIRECTION_LABEL[txn.direction]}>
+      <Drawer open onClose={onClose} title={txn.kind === 'withdrawal' ? 'Withdrawal' : DIRECTION_LABEL[txn.direction]}>
         <div className="flex items-center gap-3 mb-6">
           <DirectionIcon direction={txn.direction} />
           <div className="min-w-0">
