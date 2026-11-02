@@ -32,10 +32,15 @@ export interface Balance {
 /** `/v1/transactions` and `/v1/deposits` rows. */
 export interface ApiTransaction {
   id: string;
-  kind: 'fiat' | 'crypto' | 'transfer';
+  /** `withdrawal` = a crypto withdrawal (`/v1/transactions?kind=withdrawal`). */
+  kind: 'fiat' | 'crypto' | 'transfer' | 'withdrawal';
   customer_id: string | null;
   asset_code: string;
   amount: string;
+  /**
+   * The business's fee pricing (set by Fluxel) applied to this row. Deposits:
+   * taken out of `amount`. Payouts and withdrawals: charged on top of it.
+   */
   fee: string;
   status: string;
   chain: string | null;

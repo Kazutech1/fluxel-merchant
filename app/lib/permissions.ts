@@ -98,7 +98,9 @@ export function permissionForV1(method: string, path: string): Permission | null
   if (/^\/payout-accounts(\/|$)/.test(p)) return read ? 'balances.read' : 'payouts.write';
   if (/^\/payouts(\/|$)/.test(p)) return read ? 'transactions.read' : 'payouts.write';
   if (/^\/crypto-withdrawals(\/|$)/.test(p)) return read ? 'transactions.read' : 'withdrawals.write';
-  if (p === '/banks' || p === '/bank-accounts/resolve' || p === '/fees/preview') return 'balances.read';
+  if (p === '/banks' || p === '/bank-accounts/resolve') return 'balances.read';
+  // Same permission the API's dashboard allowlist gives it (`api/src/permissions.rs`).
+  if (p === '/fees/preview') return read ? 'transactions.read' : null;
   if (/^\/webhook-(endpoints|deliveries)(\/|$)/.test(p)) return 'webhooks.manage';
   if (p === '/checkout-config' || p.startsWith('/business/')) return read ? 'transactions.read' : 'settings.manage';
   if (p === '/sandbox/simulate/fiat-deposit') return m === 'POST' ? 'customers.write' : null;

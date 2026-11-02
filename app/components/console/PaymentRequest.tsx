@@ -7,8 +7,7 @@ import { checkoutUrl } from '../../lib/console/checkoutLink';
 import type { CheckoutContext } from '../../lib/checkoutContext';
 import { dash, v1 } from '../../lib/console/client';
 import { formatRelative } from '../../lib/console/format';
-import { useFeePreview } from '../../lib/console/data';
-import { decimalsFor, formatMinor, toMinor } from '../../lib/console/money';
+import { decimalsFor, toMinor } from '../../lib/console/money';
 import { useCryptoEnabled } from '../../lib/features';
 import type { Asset } from '../../lib/console/models';
 import CurrencyIcon from './CurrencyIcon';
@@ -84,18 +83,14 @@ export function AmountField({
   const decimals = decimalsFor(asset, assets);
   const minor = value === '' ? null : toMinor(value, decimals);
   const invalid = value !== '' && !minor;
-  const fee = useFeePreview('deposit', minor);
+  // The API won't preview a deposit fee for a dashboard session (403), so
+  // the console can't quote it here. The fee charged shows on the transaction.
   return (
     <Field
       label="Amount"
       htmlFor={id}
       error={invalid ? `Enter a positive amount with at most ${decimals} decimal places.` : undefined}
-      hint={
-        fee.data &&
-        (fee.data.fee === '0'
-          ? 'No fee — you receive the full amount.'
-          : `Fee ${formatMinor(fee.data.fee, asset, assets)} · you receive ${formatMinor(fee.data.net_amount, asset, assets)}`)
-      }
+      hint="Any deposit fee is taken out of what you receive. You’ll see it on the transaction."
     >
       <div className="relative">
         {currency === 'NGN' && <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3">₦</span>}
